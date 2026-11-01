@@ -1,0 +1,62 @@
+# CI: Release Notes (CHANGELOG.md je Paket zur Version), Typprüfung, Build und Tests beider Pakete (Datenbank-Tests gegen
+# PostgreSQL im Service-Container, ohne @vollholz/iam).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read       # @vollholz/iam-web (Entwicklungsabhängigkeit von discussion-web)
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: Typprüfung, Build und Tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-superuser
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      # Nur Wegwerf-Werte für die Test-Datenbank im Service-Container
+      TEST_POSTGRES_URL: postgres://postgres:ci-superuser@localhost:5433/postgres
+      NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: "@vollholz"
+      - run: npm ci --no-audit --no-fund
+      - name: Release Notes (keine neue Version ohne CHANGELOG-Eintrag)
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          npx tsc -p scripts/tsconfig.json
+          node --test --test-reporter=spec scripts/*.test.ts
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags --depth=1 origin "$BASE_REF"
+            node scripts/changelog.ts check --base FETCH_HEAD
+          else
+            node scripts/changelog.ts check
+          fi
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - name: Pakete lassen sich packen
+        run: npm pack --workspaces --dry-run
