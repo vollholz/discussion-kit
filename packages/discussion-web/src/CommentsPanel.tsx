@@ -261,12 +261,13 @@ function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?:
 
   return (
     <form ref={formRef} className={`cm-compose${replyTo || edit ? ' inline' : ''}`} onSubmit={e => { e.preventDefault(); submit(); }} aria-labelledby={labelId}>
-      <label id={labelId} className="dk-small dk-muted" htmlFor={`${listId}-ta`}>{label}</label>
+      {/* «Neuer Kommentar» nur für Screenreader (Überschrift und Platzhalter sagen es); Antwort an … und Bearbeiten sichtbar */}
+      <label id={labelId} className={replyTo || edit ? 'dk-small dk-muted' : 'dk-sr'} htmlFor={`${listId}-ta`}>{label}</label>
       <div className="cm-input">
         <div className="cm-mirror-wrap" aria-hidden="true"><Mirror text={text} people={chosen} scroll={scroll} /></div>
         <textarea id={`${listId}-ta`} ref={ref} value={text} rows={replyTo || edit ? 2 : 3} maxLength={MAX} disabled={busy}
           placeholder={replyTo ? 'Antworten …' : 'Kommentar schreiben … (@ erwähnt eine Person)'}
-          role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={listId} aria-describedby={hintId}
+          role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={listId} aria-describedby={mentioned.length ? hintId : undefined}
           aria-activedescendant={open && people[idx] ? `${listId}-${idx}` : undefined}
           onChange={e => { setText(e.target.value); detect(e.target.value, e.target.selectionStart ?? e.target.value.length); }}
           onClick={e => detect(text, (e.target as HTMLTextAreaElement).selectionStart ?? text.length)}
@@ -288,10 +289,7 @@ function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?:
           </div>
         ) : null}
       </div>
-      <div id={hintId} className="dk-small dk-muted">
-        {mentioned.length ? <>Erwähnt: {mentioned.map((n, i) => <span key={i} className="mention">@{n}</span>)} · </> : null}
-        **fett**, *kursiv*, `Code`, «- » für Listen · Strg+Enter sendet
-      </div>
+      {mentioned.length ? <div id={hintId} className="dk-small dk-muted">Erwähnt: {mentioned.map((n, i) => <span key={i} className="mention">@{n}</span>)}</div> : null}
       {error ? <ErrorBox error={error} compact /> : null}
       <div className="cm-buttons">
         <button type="button" className="dk-btn sm ghost" onMouseDown={e => e.preventDefault()} onClick={insertAt} disabled={busy}>@ Person erwähnen</button>

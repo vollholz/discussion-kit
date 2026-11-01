@@ -15,6 +15,13 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/): Breaking = Ma
 - `NotificationBell`: optional `onShowAll`, ein Link unten führt zur Übersicht.
 - `CommentText`: optional `me`, die eigene Erwähnung ist hervorgehoben. Hook `useCommentOverview`.
 
+### Geändert
+
+- Unter dem Kommentarfeld steht kein Hinweis zur Formatierung mehr («**fett**, *kursiv* … · Strg+Enter sendet»);
+  «Erwähnt: …» erscheint nur, wenn jemand erwähnt ist. Strg+Enter sendet weiterhin.
+- Die Beschriftung «Neuer Kommentar» über dem Feld ist nur noch für Screenreader da; «Antwort an …» und «Kommentar
+  bearbeiten» bleiben sichtbar.
+
 ## [1.0.1] – 2026-11-01
 
 ### Behoben
