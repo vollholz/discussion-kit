@@ -12,7 +12,7 @@
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { compareVersions, FOR_OPERATIONS, FOR_USERS, sections, subsection, type Section } from '../packages/discussion/src/release-notes.ts';
 
 const root = join(import.meta.dirname, '..');
@@ -30,8 +30,10 @@ function packages(): Pkg[] {
 
 /** Version des Pakets im Basis-Stand; null, wenn es das Paket dort nicht gab. */
 function baseVersion(ref: string, p: Pkg): string | null {
+  // git show erwartet «/» im Pfad, auch unter Windows (relative liefert dort «\»)
+  const path = relative(root, join(p.dir, 'package.json')).replaceAll(sep, '/');
   try {
-    const raw = execFileSync('git', ['show', `${ref}:${relative(root, join(p.dir, 'package.json'))}`], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const raw = execFileSync('git', ['show', `${ref}:${path}`], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
     return (JSON.parse(raw) as { version: string }).version;
   } catch { return null; }
 }
