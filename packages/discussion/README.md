@@ -80,3 +80,10 @@ const host: DiscussionHost = {
 - Bereinigung im Worker: `purgeDeleted` (Kommentare, Benachrichtigungen) und `purgeDeletedAttachments` (Dateien).
 - Schlüsselrotation: `rewrapAttachmentKeys` je Mandant; Dateien bleiben unverändert.
 - Ablage: `FsBlobStore` (Verzeichnis) oder `S3BlobStore` (S3-kompatibel, SigV4 ohne SDK).
+
+## Release Notes für die App
+
+`npx discussion-notes` gibt die Änderungen aller Pakete des Kits seit dem letzten Tag der App als Block für deren
+Release Notes aus (Unterabschnitte «Für Nutzer» und «Für den Betrieb» aus `CHANGELOG.md`). Optionen: `--seit <git-ref>`,
+`--lockfile <pfad>`, `--ebene <1-5>`, `--json`. Als Funktionen: `@vollholz/discussion/release-notes` (`collect`,
+`render`, `lockedVersions`). Regeln: README des Repos, Abschnitt «Release Notes».
