@@ -6,8 +6,8 @@
  * beim Speichern prüft; ohne `can` gilt das Recht auf Ebene der Organisation.
  */
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { mentionToken, request, useCommentMutations, useComments, dkKeys, type Comment, type Revision, type Target } from './api.ts';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { mentionToken, request, useCommentMutations, useComments, dkKeys, type Comment, type PersonRef, type Revision, type Target } from './api.ts';
 import { useDiscussion, useToaster, type Person } from './config.tsx';
 import { CommentText } from './markdown.tsx';
 import { allowed, type DiscussionCan } from './can.ts';
@@ -117,13 +117,65 @@ function Revisions({ id }: { id: string }) {
   );
 }
 
+/** Erwähnung im Format des Servers. */
+const TOKEN = /@\[([^\]\n]{1,200})\]\(([0-9a-fA-F-]{36})\)/g;
+const escapeRe = (v: string) => v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/** «@Name» der gewählten Personen, längste Namen zuerst, nicht mitten in einem Wort endend. */
+const mentionRe = (people: PersonRef[]) => people.length
+  ? new RegExp(`@(${[...people].sort((a, b) => b.name.length - a.name.length).map(p => escapeRe(p.name)).join('|')})(?![\\p{L}\\p{N}_])`, 'gu')
+  : null;
+
+/** Gespeicherter Text → Anzeige im Feld («@Name») und die erwähnten Personen. */
+function toDisplay(body: string): { text: string; people: PersonRef[] } {
+  const people: PersonRef[] = [];
+  const text = body.replace(TOKEN, (_m, name: string, id: string) => {
+    if (!people.some(p => p.id === id)) people.push({ id, name });
+    return `@${name}`;
+  });
+  return { text, people };
+}
+
+/** Anzeige im Feld → Text für den Server: «@Name» gewählter Personen wird zu «@[Name](id)». */
+function toBody(text: string, people: PersonRef[]): string {
+  const re = mentionRe(people);
+  return re ? text.replace(re, (_m, name: string) => mentionToken(people.find(p => p.name === name)!)) : text;
+}
+
+/** Erwähnte Personen, deren «@Name» noch im Text steht. */
+function mentionedIn(text: string, people: PersonRef[]): PersonRef[] {
+  const re = mentionRe(people);
+  if (!re) return [];
+  const names = new Set([...text.matchAll(re)].map(m => m[1]!));
+  return people.filter(p => names.has(p.name));
+}
+
+/** Text des Felds mit hervorgehobenen Erwähnungen (Ebene hinter der Textarea, gleiche Masse). */
+function Mirror({ text, people, scroll }: { text: string; people: PersonRef[]; scroll: number }) {
+  const re = mentionRe(people);
+  const parts: ReactNode[] = [];
+  let last = 0, i = 0;
+  if (re) for (const m of text.matchAll(re)) {
+    if (m.index > last) parts.push(text.slice(last, m.index));
+    parts.push(<mark key={i++} className="cm-mark">{m[0]}</mark>);
+    last = m.index + m[0].length;
+  }
+  parts.push(text.slice(last), '\u200b');
+  return <div className="cm-mirror" aria-hidden="true" style={{ transform: `translateY(${-scroll}px)` }}>{parts}</div>;
+}
+
 /** Eingabe für neue Kommentare, Antworten und Bearbeitungen, mit Personensuche nach «@». */
 function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?: Comment; edit?: Comment; onDone?: () => void }) {
   const d = useDiscussion();
   const { ErrorBox } = d.ui;
   const toast = useToaster();
   const m = useCommentMutations(target);
-  const [text, setText] = useState(edit?.body ?? '');
+  const initial = useMemo(() => toDisplay(edit?.body ?? ''), [edit?.body]);
+  const [text, setText] = useState(initial.text);
+  /** Gewählte Personen; erwähnt ist, wessen «@Name» noch im Text steht. */
+  const [chosen, setChosen] = useState<PersonRef[]>(() => [...initial.people, ...(edit?.mentions ?? []).filter(m => !initial.people.some(p => p.id === m.id))]);
+  const [scroll, setScroll] = useState(0);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const [query, setQuery] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[]>([]);
   const [searchState, setSearchState] = useState<'idle' | 'loading' | 'error'>('idle');
@@ -157,8 +209,10 @@ function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?:
     const m2 = TRIGGER.exec(before);
     if (!m2) return;
     const start = before.length - m2[2]!.length - 1;
-    const token = `${mentionToken(p)} `;
+    const name = p.name.replace(/[[\]\n]/g, ' ').trim();
+    const token = `@${name} `;
     const next = before.slice(0, start) + token + after;
+    setChosen(list => [...list.filter(x => x.id !== p.id && x.name !== name), { id: p.id, name }]);
     setText(next); setQuery(null);
     requestAnimationFrame(() => { el.focus(); const pos = start + token.length; el.setSelectionRange(pos, pos); });
   };
@@ -173,10 +227,10 @@ function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?:
   };
 
   const submit = () => {
-    const body = text.trim();
+    const body = toBody(text, chosen).trim();
     if (!body || busy) return;
     setError(null);
-    const done = (msg: string) => () => { setText(''); setQuery(null); toast.show(msg); onDone?.(); };
+    const done = (msg: string) => () => { setText(''); setChosen([]); setQuery(null); toast.show(msg); onDone?.(); };
     if (edit) m.update.mutate({ id: edit.id, body, revision: edit.revision }, { onSuccess: done('Kommentar geändert'), onError: setError });
     else m.create.mutate({ body, ...(replyTo ? { replyTo: replyTo.id } : {}) }, { onSuccess: done(replyTo ? 'Antwort gespeichert' : 'Kommentar gespeichert'), onError: setError });
   };
@@ -193,20 +247,30 @@ function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?:
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); }
   };
 
-  const mentioned = useMemo(() => [...text.matchAll(/@\[([^\]\n]{1,200})\]\([0-9a-fA-F-]{36}\)/g)].map(x => x[1]!), [text]);
+  const mentioned = useMemo(() => mentionedIn(text, chosen).map(p => p.name), [text, chosen]);
+  // Schliessen beim Verlassen nur, wenn der Fokus das Formular verlässt (sonst schlösse z. B. «@ Person erwähnen» die
+  // eben geöffnete Auswahl wieder: Flackern)
+  const cancelClose = () => { if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null; } };
+  const onBlur = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    if (formRef.current?.contains(e.relatedTarget as Node | null)) return;
+    cancelClose();
+    closeTimer.current = setTimeout(() => { closeTimer.current = null; setQuery(null); }, 150);
+  };
+  useEffect(() => cancelClose, []);
   const label = edit ? 'Kommentar bearbeiten' : replyTo ? `Antwort an ${replyTo.author.name}` : 'Neuer Kommentar';
 
   return (
-    <form className={`cm-compose${replyTo || edit ? ' inline' : ''}`} onSubmit={e => { e.preventDefault(); submit(); }} aria-labelledby={labelId}>
+    <form ref={formRef} className={`cm-compose${replyTo || edit ? ' inline' : ''}`} onSubmit={e => { e.preventDefault(); submit(); }} aria-labelledby={labelId}>
       <label id={labelId} className="dk-small dk-muted" htmlFor={`${listId}-ta`}>{label}</label>
       <div className="cm-input">
+        <div className="cm-mirror-wrap" aria-hidden="true"><Mirror text={text} people={chosen} scroll={scroll} /></div>
         <textarea id={`${listId}-ta`} ref={ref} value={text} rows={replyTo || edit ? 2 : 3} maxLength={MAX} disabled={busy}
           placeholder={replyTo ? 'Antworten …' : 'Kommentar schreiben … (@ erwähnt eine Person)'}
           role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={listId} aria-describedby={hintId}
           aria-activedescendant={open && people[idx] ? `${listId}-${idx}` : undefined}
           onChange={e => { setText(e.target.value); detect(e.target.value, e.target.selectionStart ?? e.target.value.length); }}
           onClick={e => detect(text, (e.target as HTMLTextAreaElement).selectionStart ?? text.length)}
-          onKeyDown={onKey} onBlur={() => setTimeout(() => setQuery(null), 150)} />
+          onKeyDown={onKey} onFocus={cancelClose} onBlur={onBlur} onScroll={e => setScroll((e.target as HTMLTextAreaElement).scrollTop)} />
         {open ? (
           <div className="cm-suggest">
             <div role="status" aria-live="polite" className="dk-small dk-muted">
@@ -230,7 +294,7 @@ function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?:
       </div>
       {error ? <ErrorBox error={error} compact /> : null}
       <div className="cm-buttons">
-        <button type="button" className="dk-btn sm ghost" onClick={insertAt} disabled={busy}>@ Person erwähnen</button>
+        <button type="button" className="dk-btn sm ghost" onMouseDown={e => e.preventDefault()} onClick={insertAt} disabled={busy}>@ Person erwähnen</button>
         <span className="dk-spacer" />
         {onDone ? <button type="button" className="dk-btn sm ghost" onClick={onDone}>Abbrechen</button> : null}
         <button type="submit" className="dk-btn sm primary" disabled={busy || !text.trim()}>{busy ? 'Wird gespeichert …' : edit ? 'Speichern' : replyTo ? 'Antworten' : 'Kommentieren'}</button>

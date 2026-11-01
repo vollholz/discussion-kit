@@ -39,7 +39,7 @@ describe('Kommentartext', () => {
 
   it('zeigt Erwähnungen mit aktuellem Namen', () => {
     render(<CommentText text={`Hallo @[Carla alt](${CARLA.id})!`} mentions={[CARLA]} />);
-    expect(screen.getByText('@Carla Prüferin')).toHaveClass('mention');
+    expect(screen.getByText('@Carla Prüferin', { selector: '.mention' })).toBeInTheDocument();
   });
 });
 
@@ -88,9 +88,10 @@ describe('Reiter Kommentare', () => {
     expect(box).toHaveAttribute('aria-activedescendant', within(list).getByRole('option').id);
     expect(screen.getByText('1 Person gefunden')).toHaveAttribute('role', 'status');
     await userEvent.keyboard('{Enter}');
-    expect(box).toHaveValue(`Bitte prüfen @[Carla Prüferin](${CARLA.id}) `);
+    expect(box).toHaveValue('Bitte prüfen @Carla Prüferin ');
     expect(screen.queryByRole('listbox')).toBeNull();
-    expect(screen.getByText('@Carla Prüferin')).toHaveClass('mention');
+    expect(screen.getByText('@Carla Prüferin', { selector: '.mention' })).toBeInTheDocument();
+    expect(document.querySelector('.cm-mark')).toHaveTextContent('@Carla Prüferin');
     // Die Auswahl setzt den Cursor im nächsten Frame; erst danach weitertippen
     await act(() => new Promise<void>(r => requestAnimationFrame(() => r())));
     await userEvent.type(box, 'danke');
@@ -98,6 +99,47 @@ describe('Reiter Kommentare', () => {
     await waitFor(() => expect(posted).toEqual({ body: `Bitte prüfen @[Carla Prüferin](${CARLA.id}) danke` }));
     expect(calls.find(c => c.method === 'POST')!.headers.get('x-csrf-token')).toBe('csrf-123');
     await waitFor(() => expect(box).toHaveValue(''));
+  });
+
+  it('«@ Person erwähnen»: Auswahl bleibt offen (kein Flackern), Fokus bleibt im Feld', async () => {
+    commentRoutes([]);
+    renderWith(<CommentsPanel target={T} />, { me: WRITE });
+    const box = await screen.findByRole('combobox', { name: 'Neuer Kommentar' });
+    await userEvent.type(box, 'Hallo');
+    await userEvent.click(screen.getByRole('button', { name: '@ Person erwähnen' }));
+    expect(await screen.findByRole('listbox', { name: 'Person erwähnen' })).toBeInTheDocument();
+    await act(() => new Promise<void>(r => setTimeout(r, 300)));
+    expect(screen.getByRole('listbox', { name: 'Person erwähnen' })).toBeInTheDocument();
+    expect(box).toHaveFocus();
+    expect(box).toHaveValue('Hallo @');
+  });
+
+  it('Bearbeiten zeigt Erwähnungen als «@Name» und speichert sie im Format des Servers; angetippter Name ist keine Erwähnung mehr', async () => {
+    let patched: unknown = null;
+    commentRoutes([comment({ id: 'c1', body: `Hallo @[Carla Prüferin](${CARLA.id})`, mentions: [CARLA] })], {
+      'PATCH /v1/comments/c1': async req => { patched = await req.json(); return json(comment({ id: 'c1', body: (patched as { body: string }).body, revision: 2 })); },
+    });
+    renderWith(<CommentsPanel target={T} />, { me: WRITE });
+    await userEvent.click(await screen.findByRole('button', { name: 'Bearbeiten' }));
+    const box = screen.getByRole('combobox', { name: 'Kommentar bearbeiten' });
+    expect(box).toHaveValue('Hallo @Carla Prüferin');
+    await userEvent.type(box, ', danke');
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(patched).toEqual({ body: `Hallo @[Carla Prüferin](${CARLA.id}), danke` }));
+  });
+
+  it('Name einer Erwähnung geändert: wird zu normalem Text', async () => {
+    let posted: unknown = null;
+    commentRoutes([comment({ id: 'c1', body: `@[Carla Prüferin](${CARLA.id})`, mentions: [CARLA] })], {
+      'PATCH /v1/comments/c1': async req => { posted = await req.json(); return json(comment({ id: 'c1', body: (posted as { body: string }).body, revision: 2 })); },
+    });
+    renderWith(<CommentsPanel target={T} />, { me: WRITE });
+    await userEvent.click(await screen.findByRole('button', { name: 'Bearbeiten' }));
+    const box = screen.getByRole('combobox', { name: 'Kommentar bearbeiten' });
+    await userEvent.type(box, '{Backspace}{Backspace}');
+    expect(document.querySelector('.cm-mark')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+    await waitFor(() => expect(posted).toEqual({ body: '@Carla Prüfer' }));
   });
 
   it('Escape schliesst die Personensuche; Fehler beim Speichern bleiben sichtbar', async () => {
