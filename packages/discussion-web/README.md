@@ -2,7 +2,8 @@
 
 React-Komponenten zu [`@vollholz/discussion`](../discussion): `CommentsPanel` (Verlauf, Antworten, @-Erwähnung per
 Tastatur, Bearbeiten mit Verlauf), `AttachmentsPanel` (Hochladen mit Fortschritt und Drag & Drop, Vorschau nur für
-Rasterbilder), `NotificationBell` (Glocke mit Zahl der ungelesenen). Peer: React 19, TanStack Query 5.
+Rasterbilder), `NotificationBell` (Glocke mit Zahl der ungelesenen), `CommentsOverview` (eigene Kommentare und
+Erwähnungen über alle Ziele). Peer: React 19, TanStack Query 5.
 
 ## Einbinden
 
@@ -27,6 +28,14 @@ import { IamDiscussionProvider } from '@vollholz/discussion-web/iam';
 ```
 
 Die Glocke entscheidet nicht selbst, wohin ein Eintrag führt: `<NotificationBell onOpen={t => navigate(…)} />`.
+
+**Zentrale Übersicht** – eigene Kommentare und Erwähnungen über alle Ziele, z. B. als eigene Seite; die Glocke führt
+mit `onShowAll` dorthin:
+
+```tsx
+<CommentsOverview onOpen={(t, commentId) => navigate(…)} defaultView="mentions" />
+<NotificationBell onOpen={t => navigate(…)} onShowAll={() => navigate('/ich/kommentare')} />
+```
 
 ## Anpassen
 

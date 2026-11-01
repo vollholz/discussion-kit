@@ -2,7 +2,8 @@
  * Glocke in der Kopfzeile: Zahl der ungelesenen Benachrichtigungen, Liste im aufklappbaren Bereich (Disclosure, kein
  * Menü: Einträge mit Text und eigene Schaltflächen). Ein Eintrag öffnet sein Ziel (wohin, entscheidet die Shell über
  * `onOpen`) und gilt dann als gelesen. Nicht mehr sichtbare Ziele erscheinen ohne Bezeichnung, Person und Ausschnitt.
- * Esc und Klick ausserhalb schliessen, der Fokus geht zurück an die Glocke.
+ * Esc und Klick ausserhalb schliessen, der Fokus geht zurück an die Glocke. Mit `onShowAll` führt ein Link unten zur
+ * Übersicht der eigenen Kommentare und Erwähnungen (`CommentsOverview`, wohin entscheidet die Shell).
  */
 import { useEffect, useId, useRef, useState } from 'react';
 import { useMarkRead, useNotifications, type Notification } from './api.ts';
@@ -14,7 +15,7 @@ export interface InboxTarget { type: string; id: string }
 const WHAT: Record<Notification['kind'], string> = { mention: 'hat dich erwähnt', reply: 'hat auf deinen Kommentar geantwortet' };
 const GONE: Record<Notification['kind'], string> = { mention: 'Du wurdest erwähnt', reply: 'Antwort auf deinen Kommentar' };
 
-export function NotificationBell({ onOpen }: { onOpen: (t: InboxTarget) => void }) {
+export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarget) => void; onShowAll?: () => void }) {
   const { Loading, ErrorBox } = useDiscussion().ui;
   const q = useNotifications();
   const mark = useMarkRead();
@@ -83,6 +84,7 @@ export function NotificationBell({ onOpen }: { onOpen: (t: InboxTarget) => void 
               </ul>
             )}
           {q.hasNextPage ? <button type="button" className="dk-btn sm ghost nb-more" onClick={() => void q.fetchNextPage()} disabled={q.isFetchingNextPage}>{q.isFetchingNextPage ? 'Lädt …' : 'Ältere laden'}</button> : null}
+          {onShowAll ? <div className="nb-foot"><button type="button" className="dk-link dk-small" onClick={() => { setOpen(false); onShowAll(); }}>Alle Kommentare und Erwähnungen</button></div> : null}
         </div>
       ) : null}
     </div>

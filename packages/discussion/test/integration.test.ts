@@ -64,8 +64,10 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
   };
   const itemTarget: DiscussionTarget = {
     type: 'item', basePath: '/v1/items', label: { one: 'Artikel', of: 'eines Artikels', at: 'am Artikel' }, read: 'item:read',
-    async load(_req: FastifyRequest, tx, id) {
+    async load(req: FastifyRequest, tx, id) {
       const r = (await tx.query<{ id: string; name: string }>('SELECT id, name FROM shop.item WHERE id = $1', [id])).rows[0];
+      // Recht der App über die Lesesicht der Datenbank hinaus: «Geheim» sieht nur Ada
+      if (r?.name === 'Geheim' && host.principal(req).id !== ada) return null;
       return r ? { id: r.id, classified: false, title: r.name, ref: { id: r.id, name: r.name } } : null;
     },
   };
@@ -173,5 +175,55 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
     await admin.query('DELETE FROM shop.item WHERE id = $1', [id]);
     assert.equal((await admin.query('SELECT count(*)::int AS n FROM shop.comment WHERE target_id = $1 AND deleted_at IS NOT NULL', [id])).rows[0].n, 1);
     assert.equal((await call(ada, 'GET', `/v1/comments/${c.id}`)).status, 404);
+  });
+
+  test('Übersicht: eigene Kommentare und Erwähnungen über alle Ziele, nur sichtbare, seitenweise', async () => {
+    const helm = (await admin.query(`INSERT INTO shop.item (tenant_id, name) VALUES ($1, 'Helm') RETURNING id`, [A])).rows[0].id as string;
+    const secret = (await admin.query(`INSERT INTO shop.item (tenant_id, name) VALUES ($1, 'Geheim') RETURNING id`, [A])).rows[0].id as string;
+    const post = async (who: string, item: string, body: string) => {
+      const r = await call(who, 'POST', `/v1/items/${item}/comments`, { body });
+      assert.equal(r.status, 201, JSON.stringify(r.body));
+      return r.body as { id: string; revision: number };
+    };
+    const onHelm = await post(ada, helm, `@[Carl](${carl}) schau dir den Helm an`);
+    await post(ada, helm, `Notiz für mich @[Ada](${ada})`);
+    const onSecret = await post(ada, secret, `@[Carl](${carl}) nur für Ada sichtbar`);
+    const removed = await post(ada, helm, 'wird gelöscht');
+    assert.equal((await call(ada, 'DELETE', `/v1/comments/${removed.id}`)).status, 204);
+    type Item = { id: string; targetType: string; targetId: string; targetTitle: string; author: { name: string }; body: string; replyCount: number };
+    /** Alle Seiten mit kleiner Seitengrösse (prüft den Cursor). */
+    const all = async (who: string, path: string, limit: number) => {
+      const out: Item[] = [];
+      let cursor: string | null = null;
+      do {
+        const r = await call(who, 'GET', `${path}?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+        assert.equal(r.status, 200, JSON.stringify(r.body));
+        out.push(...r.body.items);
+        cursor = r.body.nextCursor;
+      } while (cursor);
+      return out;
+    };
+
+    // Carl: nur die Erwähnung am sichtbaren Ziel; die neuere am Ziel «Geheim» fällt weg, ohne die Seite zu leeren
+    const carlFirst = (await call(carl, 'GET', '/v1/me/mentions?limit=1')).body;
+    assert.deepEqual(carlFirst.items.map((i: Item) => [i.id, i.targetTitle, i.author.name]), [[onHelm.id, 'Helm', 'Ada']]);
+    assert.equal(carlFirst.nextCursor, null);
+    // Ada: eigene Kommentare an allen Zielen, die sie sieht, neueste zuerst, ohne gelöschte; Antworten gezählt
+    const mine = await all(ada, '/v1/me/comments', 2);
+    assert.deepEqual(mine.slice(0, 3).map(i => i.targetTitle), ['Geheim', 'Helm', 'Helm']);
+    assert.ok(mine.some(i => i.id === onSecret.id));
+    assert.ok(!mine.some(i => i.id === removed.id || i.body === 'bald weg'), 'gelöschte nicht');
+    const hallo = mine.find(i => i.body.startsWith('Hallo'))!;
+    assert.deepEqual([hallo.targetTitle, hallo.replyCount], ['Velo', 1]);
+    assert.equal(new Set(mine.map(i => i.id)).size, mine.length, 'keine doppelten Einträge über Seiten');
+    // Eigene Erwähnung zählt nicht; Bea sieht die Erwähnung von Ada
+    assert.deepEqual(await all(ada, '/v1/me/mentions', 5), []);
+    assert.deepEqual((await all(bea, '/v1/me/mentions', 5)).map(i => [i.targetTitle, i.author.name]), [['Velo', 'Ada']]);
+    // Erwähnung entfernt (Bearbeitung): verschwindet aus der Übersicht
+    assert.equal((await call(ada, 'PATCH', `/v1/comments/${onHelm.id}`, { body: 'schau dir den Helm an' })).status, 200);
+    assert.deepEqual(await all(carl, '/v1/me/mentions', 5), []);
+    // Anderer Mandant: nichts
+    assert.deepEqual(await all(gus, '/v1/me/comments', 5), []);
+    assert.equal((await call(ada, 'GET', '/v1/me/comments?cursor=kaputt')).status, 422);
   });
 });

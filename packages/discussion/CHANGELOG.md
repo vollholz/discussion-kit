@@ -5,6 +5,16 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/): Breaking = Ma
 
 ## [Unveröffentlicht]
 
+## [1.1.0] – 2026-11-01
+
+### Hinzugefügt
+
+- Übersicht der angemeldeten Person über alle Ziele: `GET /v1/me/comments` (eigene Kommentare und Antworten) und
+  `GET /v1/me/mentions` (Kommentare anderer, die sie erwähnen), neueste zuerst, mit Bezeichnung des Ziels und Zahl
+  der Antworten. Nur Kommentare an Zielen, die sie mit ihren aktuellen Rechten sieht (`load` je Ziel, wie die Inbox);
+  Erwähnungen folgen dem aktuellen Text (nach Bearbeitungen).
+- Migration `discussion_002_overview`: Indizes für die Übersicht (Autorin bzw. Autor, Erwähnungen).
+
 ## [1.0.0] – 2026-11-01
 
 ### Hinzugefügt

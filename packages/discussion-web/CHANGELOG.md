@@ -5,6 +5,16 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/): Breaking = Ma
 
 ## [Unveröffentlicht]
 
+## [1.1.0] – 2026-11-01
+
+### Hinzugefügt
+
+- `CommentsOverview`: zentrale Übersicht der eigenen Kommentare und Erwähnungen über alle Ziele, in zwei Reitern
+  (Tastatur), mit Ziel, Zeit, Anfang des Textes und Zahl der Antworten; das Ziel öffnet die App über `onOpen` mit der
+  ID des Kommentars. Braucht `@vollholz/discussion` ab 1.1.0.
+- `NotificationBell`: optional `onShowAll`, ein Link unten führt zur Übersicht.
+- `CommentText`: optional `me`, die eigene Erwähnung ist hervorgehoben. Hook `useCommentOverview`.
+
 ## [1.0.1] – 2026-11-01
 
 ### Behoben
