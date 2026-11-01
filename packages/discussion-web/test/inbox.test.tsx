@@ -40,7 +40,7 @@ describe('Glocke', () => {
     expect(items[0]).toHaveTextContent('ungelesen');
     expect(items[1]).toHaveTextContent('hat auf deinen Kommentar geantwortet · Laptop 1');
     await userEvent.click(within(items[0]!).getByRole('button'));
-    expect(onOpen).toHaveBeenCalledWith({ type: 'connection', id: CONN });
+    expect(onOpen).toHaveBeenCalledWith({ type: 'connection', id: CONN }, 'c1');
     await waitFor(() => expect(calls.some(c => c.method === 'POST' && c.url.endsWith('/v1/me/notifications/read'))).toBe(true));
     const post = calls.find(c => c.method === 'POST')!;
     expect(await post.json()).toEqual({ ids: ['n1'] });

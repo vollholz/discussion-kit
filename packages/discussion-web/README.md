@@ -34,7 +34,14 @@ mit `onShowAll` dorthin:
 
 ```tsx
 <CommentsOverview onOpen={(t, commentId) => navigate(…)} defaultFilter="mentions" />
-<NotificationBell onOpen={t => navigate(…)} onShowAll={() => navigate('/ich/kommentare')} />
+<NotificationBell onOpen={(t, commentId) => navigate(…)} onShowAll={() => navigate('/ich/kommentare')} />
+```
+
+**Sprung zum Kommentar** – die App gibt die ID aus `onOpen` an das Panel weiter (z. B. über `?kommentar=…` in der
+Adresse). Die Liste lädt nach, bis der Kommentar da ist, scrollt hin, hebt ihn hervor und setzt den Fokus darauf:
+
+```tsx
+<CommentsPanel target={{ type: 'order', id }} can={order.can} commentId={search.get('kommentar')} />
 ```
 
 ## Anpassen

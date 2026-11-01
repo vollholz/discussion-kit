@@ -220,6 +220,36 @@ describe('Reiter Kommentare', () => {
     expect(within(other).getByRole('button', { name: 'Kommentar von Carla Prüferin löschen' })).toBeInTheDocument();
     expect(within(other).queryByRole('button', { name: 'Bearbeiten' })).toBeNull();
   });
+
+  it('springt zum Kommentar aus der Übersicht: lädt Seiten nach, scrollt, hebt hervor und fokussiert ihn – einmal', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const pages: Record<string, unknown> = {
+      '': { items: [comment({ id: 'c1', body: 'Erste Seite' })], nextCursor: 'p2', total: 3 },
+      p2: { items: [comment({ id: 'c2', body: 'Gesucht', author: CARLA }), comment({ id: 'c3', body: 'Antwort', replyTo: 'c2' })], nextCursor: null, total: 3 },
+    };
+    const { calls } = commentRoutes([], { [`GET /v1/objects/${OBJ}/comments`]: req => json(pages[new URL(req.url).searchParams.get('cursor') ?? '']) });
+    renderWith(<CommentsPanel target={T} commentId="c3" />);
+    const hit = await screen.findByRole('article', { name: 'Kommentar von Anna Admin', current: true });
+    expect(hit).toHaveTextContent('Antwort');
+    expect(hit).toHaveClass('focused');
+    await waitFor(() => expect(hit).toHaveFocus());
+    expect(scroll).toHaveBeenCalledTimes(1);
+    expect(scroll.mock.instances[0]).toBe(hit);
+    expect(screen.getAllByRole('article').filter(a => a.classList.contains('focused'))).toHaveLength(1);
+    expect(calls.filter(c => c.url.includes('/comments')).length).toBe(2);
+  });
+
+  it('Kommentar zum Springen fehlt: lädt alle Seiten einmal und bleibt sonst still', async () => {
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const { calls } = commentRoutes([comment({ id: 'c1' })]);
+    renderWith(<CommentsPanel target={T} commentId="weg" />);
+    await screen.findByRole('article', { name: 'Kommentar von Anna Admin' });
+    expect(calls.filter(c => c.url.includes('/comments'))).toHaveLength(1);
+    expect(scroll).not.toHaveBeenCalled();
+    expect(document.querySelector('.cm.focused')).toBeNull();
+  });
 });
 
 /** XMLHttpRequest-Ersatz: meldet Fortschritt und antwortet wie vorgegeben. */
