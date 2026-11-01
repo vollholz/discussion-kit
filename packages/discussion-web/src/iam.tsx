@@ -24,10 +24,11 @@ export function useIamDiscussion(targets: Record<string, TargetConfig>, over: Pa
   const { toast } = useIamUi();
   const people = usePeople();
   const qc = useQueryClient();
-  // Principal-ID im Mandanten der Organisation dieses Tabs (GET /v1/me der API)
+  // Principal-ID im Mandanten der Organisation dieses Tabs (GET /v1/me der API), wenn die App sie nicht selbst liefert
   const meQ = useQuery({
+    enabled: !('me' in over),
     queryKey: ['discussion', 'me', me.tenant?.alias ?? null],
-    queryFn: async () => (await (await fetch('/v1/me', { credentials: 'same-origin', headers: { Accept: 'application/json', ...tenantHeaders('GET') } })).json() as { principal?: { id: string } }).principal?.id ?? null,
+    queryFn: async () => (await (await fetch(`${window.location.origin}/v1/me`, { credentials: 'same-origin', headers: { Accept: 'application/json', ...tenantHeaders('GET') } })).json() as { principal?: { id: string } }).principal?.id ?? null,
     staleTime: 5 * 60_000,
   });
   const principal = meQ.data ?? null;

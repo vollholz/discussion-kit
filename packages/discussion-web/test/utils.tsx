@@ -31,7 +31,7 @@ export const json = (body: unknown, status = 200, headers: Record<string, string
 export function mockFetch(routes: Record<string, Handler>) {
   const calls: Request[] = [];
   const fn = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const req = input instanceof Request ? input : new Request(new URL(String(input), 'http://localhost').toString(), init);
+    const req = input instanceof Request ? input : new Request(String(input), init);
     calls.push(req.clone());
     const url = new URL(req.url);
     const h = routes[`${req.method} ${url.pathname}`];

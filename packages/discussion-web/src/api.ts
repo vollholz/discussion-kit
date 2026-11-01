@@ -117,7 +117,7 @@ export function useDeleteAttachment(t: Target) {
 }
 
 /** Adresse des Inhalts (Download, Vorschau), über `link` der App (z. B. Organisation als Parameter). */
-export const contentUrl = (d: Discussion, id: string) => d.link(`${d.baseUrl}/v1/attachments/${encodeURIComponent(id)}/content`);
+export const contentUrl = (d: Discussion, id: string) => d.link(`${d.linkBase}/v1/attachments/${encodeURIComponent(id)}/content`);
 
 /** Datei hochladen; `onProgress` mit Anteil 0…1. Abbrechen über `signal`. */
 export function uploadAttachment(d: Discussion, t: Target, file: File, o: { onProgress?: (p: number) => void; signal?: AbortSignal } = {}): Promise<Attachment> {

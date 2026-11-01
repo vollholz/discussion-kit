@@ -54,6 +54,8 @@ export interface ProblemBody { title?: string; detail?: string; status?: number;
 export interface Discussion extends Required<Omit<DiscussionConfig, 'toast' | 'onUnauthorized' | 'components'>> {
   toast: Toaster | null;
   onUnauthorized?: () => void;
+  /** Basis für Links im Dokument (Download, Bild): relativ, wenn die App keine `baseUrl` setzt. */
+  linkBase: string;
   ui: DiscussionComponents;
 }
 
@@ -61,9 +63,9 @@ const Ctx = createContext<Discussion | null>(null);
 
 export function DiscussionProvider({ children, ...config }: DiscussionConfig & { children: ReactNode }) {
   const value = useMemo<Discussion>(() => {
-    const baseUrl = config.baseUrl ?? '', headers = config.headers ?? (() => ({}));
+    const baseUrl = config.baseUrl ?? defaultOrigin(), headers = config.headers ?? (() => ({}));
     return {
-      targets: config.targets, baseUrl, headers, link: config.link ?? (u => u), me: config.me, can: config.can, onUnauthorized: config.onUnauthorized,
+      targets: config.targets, baseUrl, linkBase: config.baseUrl ?? '', headers, link: config.link ?? (u => u), me: config.me, can: config.can, onUnauthorized: config.onUnauthorized,
       searchPeople: config.searchPeople ?? defaultPeopleSearch(baseUrl, headers),
       toast: config.toast ?? null,
       ui: { ...defaultComponents, ...config.components },
@@ -78,6 +80,9 @@ export function useDiscussion(): Discussion {
   if (!v) throw new Error('DiscussionProvider fehlt: Komponenten von @vollholz/discussion-web brauchen ihn (README).');
   return v;
 }
+
+/** Gleiche Herkunft als absolute Adresse (fetch ausserhalb des Browsers, z. B. in Tests, kennt keine relativen Pfade). */
+const defaultOrigin = () => (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null' ? window.location.origin : '');
 
 /** Personenverzeichnis nach Konvention von `@vollholz/iam` (`GET /v1/people`). */
 function defaultPeopleSearch(baseUrl: string, headers: () => Record<string, string>) {
