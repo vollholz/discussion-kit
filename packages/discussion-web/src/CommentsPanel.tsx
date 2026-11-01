@@ -1,5 +1,6 @@
 /**
- * Kommentare an einem Ziel: Verlauf mit Antworten (eine Ebene), Schreiben mit Erwähnung (@ öffnet die
+ * Kommentare an einem Ziel: Verlauf mit Antworten (eine Ebene). Unter jedem Gespräch ein Feld «Antworten …», damit
+ * Antworten so naheliegt wie ein neuer Kommentar; das Feld unten beginnt ein neues Thema. Schreiben mit Erwähnung (@ öffnet die
  * Personensuche, Pfeiltasten wählen, Enter oder Tab übernimmt), Bearbeiten eigener Kommentare mit sichtbarem
  * Verlauf früherer Stände, Löschen (eigene oder mit Moderationsrecht). Text wird ohne HTML dargestellt (markdown.tsx).
  * Rechte am Ziel (`can.comment`, `can.moderateComments`: Rolle, Freigaben und Verbote je Bereich), wie die API sie
@@ -36,17 +37,28 @@ export function CommentsPanel({ target, can: caps }: { target: Target; can?: Dis
     <div className="discussion">
       {all.length ? (
         <ol className="cm-list" aria-label="Kommentare">
-          {roots.map(c => (
-            <li key={c.id}>
-              <CommentItem c={c} me={me} target={target} write={write} moderate={moderate} onReply={write ? () => setReplyTo(c) : undefined} />
-              {replies(c.id).length || replyTo?.id === c.id ? (
-                <ol className="cm-replies" aria-label={`Antworten an ${c.author.name}`}>
-                  {replies(c.id).map(r => <li key={r.id}><CommentItem c={r} me={me} target={target} write={write} moderate={moderate} onReply={write ? () => setReplyTo(c) : undefined} /></li>)}
-                  {replyTo?.id === c.id ? <li><Composer target={target} replyTo={c} onDone={() => setReplyTo(null)} /></li> : null}
-                </ol>
-              ) : null}
-            </li>
-          ))}
+          {roots.map(c => {
+            const rs = replies(c.id);
+            // Antwort hängt am Ausgangskommentar; ist er gelöscht, an der letzten sichtbaren Antwort (der Server ordnet sie dem Ausgang zu)
+            const base = c.deleted ? rs.filter(r => !r.deleted).at(-1) : c;
+            return (
+              <li key={c.id}>
+                <CommentItem c={c} me={me} target={target} write={write} moderate={moderate} />
+                {rs.length || (write && base) ? (
+                  <div className="cm-thread">
+                    {rs.length ? (
+                      <ol className="cm-replies" aria-label={`Antworten an ${c.author.name}`}>
+                        {rs.map(r => <li key={r.id}><CommentItem c={r} me={me} target={target} write={write} moderate={moderate} /></li>)}
+                      </ol>
+                    ) : null}
+                    {write && base ? (replyTo?.id === base.id
+                      ? <Composer target={target} replyTo={base} onDone={() => setReplyTo(null)} />
+                      : <button type="button" className="cm-reply-prompt" aria-label={`Antworten an ${base.author.name}`} onClick={() => setReplyTo(base)}><Icon name="reply" />Antworten …</button>) : null}
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
         </ol>
       ) : <Empty icon="comment" title="Noch keine Kommentare">{write ? `Fragen, Hinweise und Absprachen ${text.here} gehören hierher. Mit @ erwähnst du eine Person.` : `Kommentare ${text.here} erscheinen hier.`}</Empty>}
       {q.hasNextPage ? <button type="button" className="dk-btn sm" onClick={() => void q.fetchNextPage()} disabled={q.isFetchingNextPage}>{q.isFetchingNextPage ? 'Lädt …' : 'Weitere Kommentare laden'}</button> : null}
@@ -57,7 +69,7 @@ export function CommentsPanel({ target, can: caps }: { target: Target; can?: Dis
   );
 }
 
-function CommentItem({ c, me, target, write, moderate, onReply }: { c: Comment; me: string | null; target: Target; write: boolean; moderate: boolean; onReply?: () => void }) {
+function CommentItem({ c, me, target, write, moderate }: { c: Comment; me: string | null; target: Target; write: boolean; moderate: boolean }) {
   const toast = useToaster();
   const { Confirm } = useDiscussion().ui;
   const m = useCommentMutations(target);
@@ -81,9 +93,8 @@ function CommentItem({ c, me, target, write, moderate, onReply }: { c: Comment; 
           <Composer target={target} edit={c} onDone={() => setEditing(false)} />
         ) : <CommentText text={c.body ?? ''} mentions={c.mentions} />}
         {showRevs ? <Revisions id={c.id} /> : null}
-        {!editing ? (
+        {!editing && (canEdit || canDelete) ? (
           <div className="cm-actions">
-            {onReply ? <button type="button" className="dk-btn sm ghost" onClick={onReply}><Icon name="reply" />Antworten</button> : null}
             {canEdit ? <button type="button" className="dk-btn sm ghost" onClick={() => setEditing(true)}><Icon name="edit" />Bearbeiten</button> : null}
             {canDelete ? <button type="button" className="dk-btn sm ghost" onClick={() => setConfirm(true)} aria-label={mine ? 'Kommentar löschen' : `Kommentar von ${c.author.name} löschen`}><Icon name="trash" />Löschen</button> : null}
           </div>
@@ -257,16 +268,17 @@ function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?:
     closeTimer.current = setTimeout(() => { closeTimer.current = null; setQuery(null); }, 150);
   };
   useEffect(() => cancelClose, []);
-  const label = edit ? 'Kommentar bearbeiten' : replyTo ? `Antwort an ${replyTo.author.name}` : 'Neuer Kommentar';
+  const label = edit ? 'Kommentar bearbeiten' : replyTo ? `Antwort an ${replyTo.author.name}` : 'Neues Thema';
 
   return (
     <form ref={formRef} className={`cm-compose${replyTo || edit ? ' inline' : ''}`} onSubmit={e => { e.preventDefault(); submit(); }} aria-labelledby={labelId}>
-      <label id={labelId} className="dk-small dk-muted" htmlFor={`${listId}-ta`}>{label}</label>
+      {/* «Neues Thema» nur für Screenreader (der Platzhalter sagt es); Antwort an … und Bearbeiten sichtbar */}
+      <label id={labelId} className={replyTo || edit ? 'dk-small dk-muted' : 'dk-sr'} htmlFor={`${listId}-ta`}>{label}</label>
       <div className="cm-input">
         <div className="cm-mirror-wrap" aria-hidden="true"><Mirror text={text} people={chosen} scroll={scroll} /></div>
         <textarea id={`${listId}-ta`} ref={ref} value={text} rows={replyTo || edit ? 2 : 3} maxLength={MAX} disabled={busy}
-          placeholder={replyTo ? 'Antworten …' : 'Kommentar schreiben … (@ erwähnt eine Person)'}
-          role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={listId} aria-describedby={hintId}
+          placeholder={replyTo ? 'Antworten …' : edit ? undefined : 'Neues Thema beginnen …'}
+          role="combobox" aria-autocomplete="list" aria-expanded={open} aria-controls={listId} aria-describedby={mentioned.length ? hintId : undefined}
           aria-activedescendant={open && people[idx] ? `${listId}-${idx}` : undefined}
           onChange={e => { setText(e.target.value); detect(e.target.value, e.target.selectionStart ?? e.target.value.length); }}
           onClick={e => detect(text, (e.target as HTMLTextAreaElement).selectionStart ?? text.length)}
@@ -288,10 +300,7 @@ function Composer({ target, replyTo, edit, onDone }: { target: Target; replyTo?:
           </div>
         ) : null}
       </div>
-      <div id={hintId} className="dk-small dk-muted">
-        {mentioned.length ? <>Erwähnt: {mentioned.map((n, i) => <span key={i} className="mention">@{n}</span>)} · </> : null}
-        **fett**, *kursiv*, `Code`, «- » für Listen · Strg+Enter sendet
-      </div>
+      {mentioned.length ? <div id={hintId} className="dk-small dk-muted">Erwähnt: {mentioned.map((n, i) => <span key={i} className="mention">@{n}</span>)}</div> : null}
       {error ? <ErrorBox error={error} compact /> : null}
       <div className="cm-buttons">
         <button type="button" className="dk-btn sm ghost" onMouseDown={e => e.preventDefault()} onClick={insertAt} disabled={busy}>@ Person erwähnen</button>

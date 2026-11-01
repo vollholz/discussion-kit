@@ -9,6 +9,26 @@ folgen die Angaben für die Entwickler der App. Sammeln für eine App: `npx disc
 
 ## [Unveröffentlicht]
 
+## [1.2.0] – 2026-11-01
+
+### Für Nutzer
+
+- (keine)
+
+### Für den Betrieb
+
+- Neue Datenbank-Migration `discussion_002_overview` mit zwei Indizes für die Übersicht (läuft mit den Migrationen
+  der App).
+
+### Hinzugefügt
+
+- Übersicht der angemeldeten Person über alle Ziele: `GET /v1/me/comments` listet eigene Kommentare und Antworten
+  und Kommentare anderer, die sie erwähnen, in einer Liste, neueste zuerst – mit `involvement` (`author`, `mention`),
+  Bezeichnung des Ziels und Zahl der Antworten; `filter=mine|mentions` grenzt ein. Nur Kommentare an Zielen, die sie
+  mit ihren aktuellen Rechten sieht (`load` je Ziel, wie die Inbox); Erwähnungen folgen dem aktuellen Text (nach
+  Bearbeitungen).
+- Migration `discussion_002_overview`: Indizes für die Übersicht (Autorin bzw. Autor, Erwähnungen).
+
 ## [1.1.0] – 2026-11-01
 
 ### Für Nutzer

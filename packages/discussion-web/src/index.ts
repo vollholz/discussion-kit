@@ -14,10 +14,11 @@ export { DiscussionProvider, useDiscussion, useToaster, type Discussion, type Di
 export { CommentsPanel } from './CommentsPanel.tsx';
 export { AttachmentsPanel } from './AttachmentsPanel.tsx';
 export { NotificationBell, type InboxTarget } from './NotificationBell.tsx';
+export { CommentsOverview } from './CommentsOverview.tsx';
 export { CommentText, safeUrl } from './markdown.tsx';
 export type { DiscussionCan } from './can.ts';
 export {
-  contentUrl, dkKeys, mentionToken, request, uploadAttachment, useAttachments, useCommentMutations, useComments, useDeleteAttachment, useDiscussionCounts,
-  useMarkRead, useNotifications, type Attachment, type Comment, type Notification, type PersonRef, type Revision, type Target,
+  contentUrl, dkKeys, mentionToken, request, uploadAttachment, useAttachments, useCommentMutations, useCommentOverview, useComments, useDeleteAttachment, useDiscussionCounts,
+  useMarkRead, useNotifications, type Attachment, type Comment, type Notification, type OverviewComment, type OverviewFilter, type PersonRef, type Revision, type Target,
 } from './api.ts';
 export { DiscussionApiError, fmtBytes, Icon, type DiscussionComponents } from './ui.tsx';

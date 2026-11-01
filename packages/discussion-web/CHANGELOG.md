@@ -9,6 +9,43 @@ folgen die Angaben für die Entwickler der App. Sammeln für eine App: `npx disc
 
 ## [Unveröffentlicht]
 
+## [1.1.0] – 2026-11-01
+
+### Für Nutzer
+
+- Neue Übersicht «Kommentare und Erwähnungen»: Eigene Kommentare und alle Stellen, an denen man erwähnt wurde, stehen
+  in einer Liste über alle Objekte, neueste zuerst, und lassen sich auf Erwähnungen oder eigene Kommentare
+  eingrenzen. Ein Klick auf einen Eintrag öffnet das Objekt. Es erscheint nur, was man sehen darf.
+- Antworten ist einfacher: Unter jedem Gespräch steht ein Feld «Antworten …». Das Feld unten beginnt ein neues Thema.
+- Das Kommentarfeld ist aufgeräumt: kein Hinweis zur Formatierung mehr darunter.
+- Die Glocke zeigt keine Benachrichtigungen mehr zu Objekten, die man nicht (mehr) sehen darf.
+
+### Für den Betrieb
+
+- (keine)
+
+### Hinzugefügt
+
+- `CommentsOverview`: zentrale Übersicht der eigenen Kommentare und Erwähnungen über alle Ziele in einer Liste, mit
+  Filter (Alle, Erwähnungen, Meine Kommentare), Ziel, Zeit, Anfang des Textes und Zahl der Antworten; Erwähnungen
+  sind mit @ markiert. Ein Eintrag öffnet sein Ziel in der App über `onOpen` mit der ID des Kommentars – mit der Maus
+  der ganze Eintrag (ausser Links im Text und beim Markieren), mit der Tastatur der Knopf mit dem Ziel. Braucht
+  `@vollholz/discussion` ab 1.2.0.
+- `NotificationBell`: optional `onShowAll`, ein Link unten führt zur Übersicht.
+- `CommentText`: optional `me`, die eigene Erwähnung ist hervorgehoben. Hook `useCommentOverview`.
+
+### Geändert
+
+- Unter dem Kommentarfeld steht kein Hinweis zur Formatierung mehr («**fett**, *kursiv* … · Strg+Enter sendet»);
+  «Erwähnt: …» erscheint nur, wenn jemand erwähnt ist. Strg+Enter sendet weiterhin.
+- Antworten liegt näher als ein neuer Kommentar: Unter jedem Gespräch steht ein Feld «Antworten …», das die Antwort
+  dort öffnet; der Knopf «Antworten» an jedem Kommentar entfällt. Das Feld unten heisst «Neues Thema beginnen …»,
+  steht mit mehr Abstand und hat keine sichtbare Beschriftung mehr (für Screenreader «Neues Thema»); «Antwort an …»
+  und «Kommentar bearbeiten» bleiben sichtbar.
+- `NotificationBell`: Benachrichtigungen an Zielen, die die Person nicht (mehr) sieht, erscheinen nicht mehr (vorher
+  «… für dich nicht mehr sichtbar» ohne Inhalt und ohne Ziel); ungelesene davon gelten als gelesen, damit die Zahl an
+  der Glocke stimmt. Die API liefert sie unverändert mit `available: false`.
+
 ## [1.0.2] – 2026-11-01
 
 ### Für Nutzer

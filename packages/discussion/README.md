@@ -54,7 +54,9 @@ await app.register(discussion({
 
 Routen je Zieltyp: `GET/POST /v1/orders/{id}/comments`, `GET/POST /v1/orders/{id}/attachments`; gemeinsam
 `/v1/comments/{id}` (lesen, bearbeiten mit `If-Match`, löschen, `/revisions`), `/v1/attachments/{id}` (`/content`),
-`GET /v1/me/notifications`, `POST /v1/me/notifications/read`. Ereignisse (`host.emit`): `comment.created|updated|deleted`,
+`GET /v1/me/notifications`, `POST /v1/me/notifications/read`; Übersicht der angemeldeten Person über alle Ziele:
+`GET /v1/me/comments` (eigene Kommentare und Erwähnungen in einer Liste, `filter=mine|mentions`), nur an Zielen, die
+sie sieht. Ereignisse (`host.emit`): `comment.created|updated|deleted`,
 `attachment.created|deleted` mit `target`.
 
 **Eigener Host** (ohne iam) – fünf Funktionen:

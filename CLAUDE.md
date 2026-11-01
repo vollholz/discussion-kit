@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm-Workspace mit zwei Paketen, die Apps Kommentare, Anhänge und Benachrichtigungen an beliebigen Zielen geben:
 
 - `packages/discussion` → `@vollholz/discussion`: PostgreSQL-Migrationen (RLS), Fastify-5-Plugin, Ablage, Verschlüsselung, Viren-Scan, Wartung.
-- `packages/discussion-web` → `@vollholz/discussion-web`: React-19-Komponenten (`CommentsPanel`, `AttachmentsPanel`, `NotificationBell`) auf TanStack Query 5, Einstieg `/iam` als Adapter für `@vollholz/iam-web`.
+- `packages/discussion-web` → `@vollholz/discussion-web`: React-19-Komponenten (`CommentsPanel`, `AttachmentsPanel`, `NotificationBell`, `CommentsOverview`) auf TanStack Query 5, Einstieg `/iam` als Adapter für `@vollholz/iam-web`.
 
 Sprache im ganzen Repo ist Deutsch in Schweizer Rechtschreibung («ss» statt «ß», Anführungszeichen «»): Kommentare,
 Fehlermeldungen, Texte der API, README, CHANGELOG und Commit-Messages. Jede Quelldatei beginnt mit einem Doc-Kommentar,

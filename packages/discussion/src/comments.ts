@@ -8,6 +8,8 @@
  *   Revision erhalten. Löschen (weich) die Autorin bzw. der Autor oder `comment:moderate`.
  * - Antworten eine Ebene tief: Antwort auf eine Antwort hängt am selben Ausgangskommentar.
  * - Erwähnte Personen und wer eine Antwort erhält, werden benachrichtigt (`notify`).
+ * - Übersicht je Person über alle Ziele (`/v1/me/comments`): eigene Kommentare und Erwähnungen in einer Liste, nur an
+ *   Zielen, die sie sieht (`load` je Ziel, wie die Inbox).
  */
 import { Type } from '@fastify/type-provider-typebox';
 import type { FastifyRequest } from 'fastify';
@@ -42,10 +44,25 @@ const RevisionOut = Type.Object({
   revision: Type.Integer(), body: Type.String(), mentions: Type.Array(PersonRef), writtenAt: DateTime, replacedAt: DateTime,
 }, { title: 'CommentRevision' });
 const IfMatch = Type.Object({ 'if-match': Type.Optional(Type.String({ description: 'ETag aus GET (W/"<revision>"). Bei Abweichung 412.' })) });
+const OverviewOut = Type.Object({
+  ...CommentOut.properties,
+  involvement: Type.Union([Type.Literal('author'), Type.Literal('mention')], { description: '`author`: von dir geschrieben, `mention`: jemand anderes hat dich erwähnt' }),
+  targetTitle: Type.String({ description: 'Bezeichnung des Ziels (mit deinen aktuellen Rechten)' }),
+  replyCount: Type.Integer({ minimum: 0, description: 'Nicht gelöschte Antworten auf diesen Kommentar' }),
+}, { title: 'CommentInOverview' });
+
+/** Abschnitte, die eine Seite der Übersicht höchstens prüft, wenn Ziele unsichtbar sind (dann ist die Seite kürzer). */
+const OVERVIEW_ROUNDS = 5;
+/** Übersicht je Person; `$2` ist die angemeldete Person. Eigene Erwähnungen gehören nicht zu den Erwähnungen. */
+const INVOLVED = {
+  mine: 'c.author_id = $2',
+  mentions: 'c.mentions @> ARRAY[$2::uuid] AND c.author_id <> $2',
+  all: '(c.author_id = $2 OR c.mentions @> ARRAY[$2::uuid])',
+};
 
 interface Row {
   id: string; target_type: string; target_id: string; author: { id: string; name: string } | null; author_id: string; body: string; mentions_ref: { id: string; name: string }[] | null; mentions: string[];
-  reply_to: string | null; created_at: Date; edited_at: Date | null; revision: number; deleted_at: Date | null; _sort?: string;
+  reply_to: string | null; created_at: Date; edited_at: Date | null; revision: number; deleted_at: Date | null; _sort?: string; reply_count?: number;
 }
 
 export const toComment = (r: Row) => {
@@ -251,4 +268,47 @@ export function registerComments(c: Ctx) {
       FROM ${S}.comment_revision r WHERE r.comment_id = $1 ORDER BY r.revision DESC`, [req.params.id])).rows;
     return { items };
   }));
+
+  app.get('/v1/me/comments', {
+    schema: {
+      tags: [TAG], summary: 'Eigene Kommentare und Erwähnungen',
+      description: 'Was dich betrifft, über alle Ziele, neueste zuerst: Kommentare und Antworten, die du geschrieben hast, und Kommentare anderer, die dich erwähnen (Stand des Textes, nach Bearbeitungen). `involvement` sagt, welches von beiden; `filter` grenzt ein. Nur Kommentare an Zielen, die du mit deinen aktuellen Rechten siehst; gelöschte erscheinen nicht. Sind viele Ziele nicht sichtbar, kann eine Seite kürzer sein als `limit` – massgebend für weitere Seiten ist `nextCursor`.',
+      querystring: Type.Object({
+        filter: Type.Optional(Type.Union([Type.Literal('mine'), Type.Literal('mentions')], { description: 'Nur eigene (`mine`) oder nur Erwähnungen (`mentions`); ohne: beides' })),
+        limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100, default: 30 })), cursor: Type.Optional(Cursor),
+      }),
+      response: { 200: Type.Object({ items: Type.Array(OverviewOut), nextCursor: NextCursor }) },
+    },
+  }, async req => {
+    const me = host.principal(req);
+    const limit = req.query.limit ?? 30;
+    const where = INVOLVED[req.query.filter ?? 'all'];
+    let pos = decodeCursor(k, req.query.cursor);
+    return host.tx(req, async tx => {
+      const loaded = new Map<string, LoadedTarget | null>();
+      const items: (ReturnType<typeof toComment> & { involvement: 'author' | 'mention'; targetTitle: string; replyCount: number })[] = [];
+      let more = true;
+      // Zeilen weiterlesen, solange unsichtbare Ziele die Seite kürzen; der Cursor steht nach der letzten geprüften Zeile
+      for (let round = 0; more && items.length < limit && round < OVERVIEW_ROUNDS; round++) {
+        const want = limit - items.length;
+        const params: unknown[] = [want + 1, me.id];
+        if (pos) params.push(pos.v, pos.id);
+        const rows = (await tx.query<Row>(
+          `SELECT ${COLS}, c.created_at::text AS _sort,
+                  (SELECT count(*)::int FROM ${S}.comment r WHERE r.tenant_id = c.tenant_id AND r.reply_to = c.id AND r.deleted_at IS NULL) AS reply_count
+             FROM ${S}.comment c
+            WHERE ${where} AND c.deleted_at IS NULL ${pos ? 'AND (c.created_at, c.id) < ($3::timestamptz, $4::uuid)' : ''}
+            ORDER BY c.created_at DESC, c.id DESC LIMIT $1`, params)).rows;
+        more = rows.length > want;
+        for (const r of rows.slice(0, want)) {
+          pos = { v: r._sort!, id: r.id };
+          const key = `${r.target_type}/${r.target_id}`;
+          if (!loaded.has(key)) loaded.set(key, (await targets.get(r.target_type)?.load(req, tx, r.target_id)) ?? null);
+          const t = loaded.get(key);
+          if (t) items.push({ ...toComment(r), involvement: r.author_id === me.id ? 'author' : 'mention', targetTitle: t.title, replyCount: r.reply_count ?? 0 });
+        }
+      }
+      return { items, nextCursor: more && pos ? encodeCursor(pos) : null };
+    });
+  });
 }

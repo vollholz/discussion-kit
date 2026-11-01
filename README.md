@@ -6,7 +6,7 @@ Eine App macht etwas kommentierbar, indem sie einen **Zieltyp** meldet und eine 
 | Paket | Inhalt |
 |---|---|
 | [`@vollholz/discussion`](packages/discussion) | Migrationen (PostgreSQL, RLS), Fastify-Plugin (Kommentare, Anhänge, Inbox), Ablage (Dateisystem, S3), Verschlüsselung, Viren-Scan, Wartung |
-| [`@vollholz/discussion-web`](packages/discussion-web) | React-Komponenten `CommentsPanel`, `AttachmentsPanel`, `NotificationBell`; optional Adapter für `@vollholz/iam-web` |
+| [`@vollholz/discussion-web`](packages/discussion-web) | React-Komponenten `CommentsPanel`, `AttachmentsPanel`, `NotificationBell`, `CommentsOverview`; optional Adapter für `@vollholz/iam-web` |
 
 ## Grundsätze
 

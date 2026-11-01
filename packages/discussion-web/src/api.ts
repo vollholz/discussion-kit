@@ -25,6 +25,10 @@ export interface Notification {
   target: { type: string; id: string; title: string | null; available: boolean };
   subject: { type: 'comment'; id: string; excerpt: string | null };
 }
+/** Kommentar in der Übersicht der angemeldeten Person: selbst geschrieben (`author`) oder erwähnt (`mention`). */
+export interface OverviewComment extends Comment { involvement: 'author' | 'mention'; targetTitle: string; replyCount: number }
+/** Filter der Übersicht: alles, nur Erwähnungen oder nur eigene Kommentare. */
+export type OverviewFilter = 'all' | 'mentions' | 'mine';
 interface Page<T> { items: T[]; nextCursor: string | null; total: number }
 
 /** Schlüssel der Abfragen (React Query). */
@@ -34,6 +38,8 @@ export const dkKeys = {
   attachments: (t: Target) => ['discussion', 'attachments', t.type, t.id] as const,
   revisions: (id: string) => ['discussion', 'revisions', id] as const,
   inbox: ['discussion', 'inbox'] as const,
+  /** Übersicht; ohne Ansicht beide (zum Invalidieren). */
+  overview: (f?: OverviewFilter) => (f ? ['discussion', 'overview', f] : ['discussion', 'overview']) as readonly string[],
 };
 
 /** Anfrage an die API; JSON-Antwort oder Fehler nach `toError`. */
@@ -90,7 +96,7 @@ export function useDiscussionCounts(t: Target): { comments?: number; attachments
 export function useCommentMutations(t: Target) {
   const d = useDiscussion();
   const qc = useQueryClient();
-  const refresh = () => qc.invalidateQueries({ queryKey: dkKeys.comments(t) });
+  const refresh = () => Promise.all([qc.invalidateQueries({ queryKey: dkKeys.comments(t) }), qc.invalidateQueries({ queryKey: dkKeys.overview() })]);
   return {
     create: useMutation({
       mutationFn: (b: { body: string; replyTo?: string }) => request<Comment>(d, 'POST', listPath(d, t, 'comments'), { body: b }),
@@ -152,6 +158,16 @@ export function useNotifications() {
     queryFn: ({ pageParam, signal }) => request<{ items: Notification[]; nextCursor: string | null; unread: number }>(d, 'GET', `/v1/me/notifications?limit=20${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''}`, { signal }),
     getNextPageParam: l => l.nextCursor ?? null,
     refetchInterval: 60_000, refetchOnWindowFocus: true,
+  });
+}
+
+/** Eigene Kommentare und Erwähnungen über alle Ziele, neueste zuerst; `filter` grenzt auf eines von beiden ein. */
+export function useCommentOverview(filter: OverviewFilter = 'all') {
+  const d = useDiscussion();
+  return useInfiniteQuery({
+    queryKey: dkKeys.overview(filter), initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) => request<{ items: OverviewComment[]; nextCursor: string | null }>(d, 'GET', `/v1/me/comments?limit=30${filter === 'all' ? '' : `&filter=${filter}`}${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''}`, { signal }),
+    getNextPageParam: l => l.nextCursor ?? null,
   });
 }
 

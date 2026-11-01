@@ -73,6 +73,30 @@ describe('Reiter Kommentare', () => {
     expect(screen.getByRole('article', { name: 'Gelöschter Kommentar' })).toHaveTextContent('Kommentar gelöscht');
   });
 
+  it('Antworten im Gespräch über das Feld darunter; das Feld unten beginnt ein neues Thema', async () => {
+    let posted: unknown = null;
+    commentRoutes([
+      comment({ id: 'c1', body: 'Frage', author: CARLA }),
+      comment({ id: 'c2', body: 'Nachfrage', replyTo: 'c1' }),
+      comment({ id: 'c3', body: null, deleted: true, author: CARLA }),
+      comment({ id: 'c4', body: 'Antwort auf Gelöschtes', replyTo: 'c3', author: CARLA }),
+    ], { [`POST /v1/objects/${OBJ}/comments`]: async req => { posted = await req.json(); return json(comment({ id: 'n1', body: 'Ja', replyTo: 'c1' }), 201); } });
+    renderWith(<CommentsPanel target={T} />, { me: WRITE });
+    expect(await screen.findByRole('combobox', { name: 'Neues Thema' })).toHaveAttribute('placeholder', 'Neues Thema beginnen …');
+    // je Gespräch ein Feld; am gelöschten Ausgang hängt die Antwort an der letzten sichtbaren Antwort
+    expect(screen.getAllByRole('button', { name: /^Antworten an/ }).map(b => b.getAttribute('aria-label'))).toEqual(['Antworten an Carla Prüferin', 'Antworten an Carla Prüferin']);
+    await userEvent.click(screen.getAllByRole('button', { name: /^Antworten an/ })[0]!);
+    const box = screen.getByRole('combobox', { name: 'Antwort an Carla Prüferin' });
+    expect(box).toHaveFocus();
+    expect(screen.getAllByRole('button', { name: /^Antworten an/ })).toHaveLength(1);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('combobox', { name: 'Antwort an Carla Prüferin' })).toBeNull();
+    await userEvent.click(screen.getAllByRole('button', { name: /^Antworten an/ })[0]!);
+    await userEvent.type(screen.getByRole('combobox', { name: 'Antwort an Carla Prüferin' }), 'Ja');
+    await userEvent.click(screen.getByRole('button', { name: 'Antworten' }));
+    await waitFor(() => expect(posted).toEqual({ body: 'Ja', replyTo: 'c1' }));
+  });
+
   it('erwähnt per @ mit Personensuche und Tastatur und sendet mit Strg+Enter', async () => {
     let posted: unknown = null;
     const { calls } = commentRoutes([], {
@@ -80,7 +104,7 @@ describe('Reiter Kommentare', () => {
     });
     renderWith(<CommentsPanel target={T} />, { me: WRITE });
     expect(await screen.findByText('Noch keine Kommentare')).toBeInTheDocument();
-    const box = screen.getByRole('combobox', { name: 'Neuer Kommentar' });
+    const box = screen.getByRole('combobox', { name: 'Neues Thema' });
     await userEvent.type(box, 'Bitte prüfen @car');
     const list = await screen.findByRole('listbox', { name: 'Person erwähnen' });
     await waitFor(() => expect(within(list).getAllByRole('option')).toHaveLength(1));
@@ -104,7 +128,7 @@ describe('Reiter Kommentare', () => {
   it('«@ Person erwähnen»: Auswahl bleibt offen (kein Flackern), Fokus bleibt im Feld', async () => {
     commentRoutes([]);
     renderWith(<CommentsPanel target={T} />, { me: WRITE });
-    const box = await screen.findByRole('combobox', { name: 'Neuer Kommentar' });
+    const box = await screen.findByRole('combobox', { name: 'Neues Thema' });
     await userEvent.type(box, 'Hallo');
     await userEvent.click(screen.getByRole('button', { name: '@ Person erwähnen' }));
     expect(await screen.findByRole('listbox', { name: 'Person erwähnen' })).toBeInTheDocument();
@@ -145,7 +169,7 @@ describe('Reiter Kommentare', () => {
   it('Escape schliesst die Personensuche; Fehler beim Speichern bleiben sichtbar', async () => {
     commentRoutes([], { [`POST /v1/objects/${OBJ}/comments`]: () => json({ title: 'Ungültige Eingabe', status: 422, detail: 'Erwähnte Person unbekannt.' }, 422) });
     renderWith(<CommentsPanel target={T} />, { me: WRITE });
-    const box = await screen.findByRole('combobox', { name: 'Neuer Kommentar' });
+    const box = await screen.findByRole('combobox', { name: 'Neues Thema' });
     await userEvent.type(box, '@');
     expect(await screen.findByRole('listbox')).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
@@ -165,7 +189,7 @@ describe('Reiter Kommentare', () => {
     expect(await screen.findByText('Hallo')).toBeInTheDocument();
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(await screen.findByText(/Zum Schreiben fehlt dir das Recht «Kommentieren»\. Rechte vergibt die Administration deiner Organisation\./)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Antworten' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Antworten an/ })).toBeNull();
   });
 
   it('Freigabe nur in diesem Bereich: Leserin schreibt und antwortet, obwohl die Rolle es nicht enthält', async () => {
@@ -173,7 +197,7 @@ describe('Reiter Kommentare', () => {
     // Rolle ohne comment:write, aber `can.comment` am Objekt (Freigabe im Schema)
     renderWith(<CommentsPanel target={T} can={CAN({ comment: true }).can} />);
     expect(await screen.findByRole('combobox')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Antworten' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Antworten an Carla Prüferin' })).toBeInTheDocument();
     expect(screen.queryByText(/fehlt dir das Recht/)).toBeNull();
   });
 
@@ -184,7 +208,7 @@ describe('Reiter Kommentare', () => {
     expect(screen.queryByRole('combobox')).toBeNull();
     expect(screen.getByText(/Für dieses Objekt ist der Zugriff eingeschränkt/)).toBeInTheDocument();
     const own = screen.getByRole('article', { name: 'Kommentar von Anna Admin' });
-    await waitFor(() => expect(screen.queryByRole('button', { name: 'Antworten' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^Antworten an/ })).toBeNull());
     expect(within(own).queryByRole('button', { name: 'Bearbeiten' })).toBeNull();
     expect(within(own).queryByRole('button', { name: /löschen/i })).toBeNull();
   });
