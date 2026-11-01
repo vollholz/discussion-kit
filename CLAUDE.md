@@ -144,10 +144,14 @@ Parameter-Properties. Relative Imports tragen die Endung `.ts`/`.tsx`. Der Build
 Neue Version eines Pakets:
 
 1. `version` in `packages/<paket>/package.json` erhöhen (SemVer, Breaking = Major).
-2. In `packages/<paket>/CHANGELOG.md` einen Abschnitt `## [x.y.z] – JJJJ-MM-TT` unter `## [Unveröffentlicht]` anlegen
-   (Keep a Changelog, aus Sicht der App).
+2. In `packages/<paket>/CHANGELOG.md` einen Abschnitt `## [x.y.z] – JJJJ-MM-TT` unter `## [Unveröffentlicht]` anlegen.
+   Er beginnt mit `### Für Nutzer` (allgemein verständlich, ohne Namen aus dem Code, die Apps übernehmen den Text
+   unverändert) und `### Für den Betrieb` (Migrationen, Einstellungen, Wartung), bei nichts zu sagen je `- (keine)`.
+   Danach folgen die Rubriken nach Keep a Changelog für die Entwickler der App. Regeln: README, Abschnitt «Release Notes».
 3. Per PR mergen.
 
-CI (`scripts/changelog.ts check`) lässt keine Version ohne Abschnitt durch und keine kleinere als auf der Basis.
+CI (`scripts/changelog.ts check`) lässt keine Version ohne Abschnitt und ohne die beiden Unterabschnitte durch und
+keine kleinere als auf der Basis. Das Lesen der Abschnitte teilt sich das Skript mit `discussion-notes`
+(`packages/discussion/src/release-notes.ts`), mit dem Apps die Texte für ihre eigenen Release Notes einsammeln.
 `release.yml` veröffentlicht nach dem Merge jede Version, die noch nicht auf GitHub Packages liegt, mit Tag
 `<paket>-v<version>` und GitHub Release. Commit-Messages folgen dem Muster `<paket> <version>: <was sich ändert>`.
