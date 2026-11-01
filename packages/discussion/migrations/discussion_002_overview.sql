@@ -1,5 +1,5 @@
--- discussion_002 Übersicht je Person über alle Ziele: eigene Kommentare (GET /v1/me/comments) und Erwähnungen
--- (GET /v1/me/mentions), neueste zuerst. Nur nicht gelöschte Kommentare erscheinen dort.
+-- discussion_002 Übersicht je Person über alle Ziele (GET /v1/me/comments): eigene Kommentare und Erwähnungen,
+-- neueste zuerst. Nur nicht gelöschte Kommentare erscheinen dort.
 --
 -- Idempotent wie discussion_001.
 

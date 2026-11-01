@@ -33,7 +33,7 @@ Die Glocke entscheidet nicht selbst, wohin ein Eintrag führt: `<NotificationBel
 mit `onShowAll` dorthin:
 
 ```tsx
-<CommentsOverview onOpen={(t, commentId) => navigate(…)} defaultView="mentions" />
+<CommentsOverview onOpen={(t, commentId) => navigate(…)} defaultFilter="mentions" />
 <NotificationBell onOpen={t => navigate(…)} onShowAll={() => navigate('/ich/kommentare')} />
 ```
 

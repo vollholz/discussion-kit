@@ -9,9 +9,11 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/): Breaking = Ma
 
 ### Hinzugefügt
 
-- `CommentsOverview`: zentrale Übersicht der eigenen Kommentare und Erwähnungen über alle Ziele, in zwei Reitern
-  (Tastatur), mit Ziel, Zeit, Anfang des Textes und Zahl der Antworten; das Ziel öffnet die App über `onOpen` mit der
-  ID des Kommentars. Braucht `@vollholz/discussion` ab 1.1.0.
+- `CommentsOverview`: zentrale Übersicht der eigenen Kommentare und Erwähnungen über alle Ziele in einer Liste, mit
+  Filter (Alle, Erwähnungen, Meine Kommentare), Ziel, Zeit, Anfang des Textes und Zahl der Antworten; Erwähnungen
+  sind mit @ markiert. Ein Eintrag öffnet sein Ziel in der App über `onOpen` mit der ID des Kommentars – mit der Maus
+  der ganze Eintrag (ausser Links im Text und beim Markieren), mit der Tastatur der Knopf mit dem Ziel. Braucht
+  `@vollholz/discussion` ab 1.1.0.
 - `NotificationBell`: optional `onShowAll`, ein Link unten führt zur Übersicht.
 - `CommentText`: optional `me`, die eigene Erwähnung ist hervorgehoben. Hook `useCommentOverview`.
 
@@ -19,8 +21,13 @@ Versionen nach [Semantic Versioning](https://semver.org/lang/de/): Breaking = Ma
 
 - Unter dem Kommentarfeld steht kein Hinweis zur Formatierung mehr («**fett**, *kursiv* … · Strg+Enter sendet»);
   «Erwähnt: …» erscheint nur, wenn jemand erwähnt ist. Strg+Enter sendet weiterhin.
-- Die Beschriftung «Neuer Kommentar» über dem Feld ist nur noch für Screenreader da; «Antwort an …» und «Kommentar
-  bearbeiten» bleiben sichtbar.
+- Antworten liegt näher als ein neuer Kommentar: Unter jedem Gespräch steht ein Feld «Antworten …», das die Antwort
+  dort öffnet; der Knopf «Antworten» an jedem Kommentar entfällt. Das Feld unten heisst «Neues Thema beginnen …»,
+  steht mit mehr Abstand und hat keine sichtbare Beschriftung mehr (für Screenreader «Neues Thema»); «Antwort an …»
+  und «Kommentar bearbeiten» bleiben sichtbar.
+- `NotificationBell`: Benachrichtigungen an Zielen, die die Person nicht (mehr) sieht, erscheinen nicht mehr (vorher
+  «… für dich nicht mehr sichtbar» ohne Inhalt und ohne Ziel); ungelesene davon gelten als gelesen, damit die Zahl an
+  der Glocke stimmt. Die API liefert sie unverändert mit `available: false`.
 
 ## [1.0.1] – 2026-11-01
 

@@ -25,10 +25,10 @@ export interface Notification {
   target: { type: string; id: string; title: string | null; available: boolean };
   subject: { type: 'comment'; id: string; excerpt: string | null };
 }
-/** Kommentar in der Übersicht der angemeldeten Person, mit Bezeichnung des Ziels. */
-export interface OverviewComment extends Comment { targetTitle: string; replyCount: number }
-/** Ansicht der Übersicht: eigene Kommentare oder Erwähnungen. */
-export type OverviewView = 'mine' | 'mentions';
+/** Kommentar in der Übersicht der angemeldeten Person: selbst geschrieben (`author`) oder erwähnt (`mention`). */
+export interface OverviewComment extends Comment { involvement: 'author' | 'mention'; targetTitle: string; replyCount: number }
+/** Filter der Übersicht: alles, nur Erwähnungen oder nur eigene Kommentare. */
+export type OverviewFilter = 'all' | 'mentions' | 'mine';
 interface Page<T> { items: T[]; nextCursor: string | null; total: number }
 
 /** Schlüssel der Abfragen (React Query). */
@@ -39,7 +39,7 @@ export const dkKeys = {
   revisions: (id: string) => ['discussion', 'revisions', id] as const,
   inbox: ['discussion', 'inbox'] as const,
   /** Übersicht; ohne Ansicht beide (zum Invalidieren). */
-  overview: (v?: OverviewView) => (v ? ['discussion', 'overview', v] : ['discussion', 'overview']) as readonly string[],
+  overview: (f?: OverviewFilter) => (f ? ['discussion', 'overview', f] : ['discussion', 'overview']) as readonly string[],
 };
 
 /** Anfrage an die API; JSON-Antwort oder Fehler nach `toError`. */
@@ -161,12 +161,12 @@ export function useNotifications() {
   });
 }
 
-/** Eigene Kommentare (`mine`) bzw. Erwähnungen (`mentions`) über alle Ziele, neueste zuerst. */
-export function useCommentOverview(view: OverviewView) {
+/** Eigene Kommentare und Erwähnungen über alle Ziele, neueste zuerst; `filter` grenzt auf eines von beiden ein. */
+export function useCommentOverview(filter: OverviewFilter = 'all') {
   const d = useDiscussion();
   return useInfiniteQuery({
-    queryKey: dkKeys.overview(view), initialPageParam: null as string | null,
-    queryFn: ({ pageParam, signal }) => request<{ items: OverviewComment[]; nextCursor: string | null }>(d, 'GET', `/v1/me/${view === 'mine' ? 'comments' : 'mentions'}?limit=30${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''}`, { signal }),
+    queryKey: dkKeys.overview(filter), initialPageParam: null as string | null,
+    queryFn: ({ pageParam, signal }) => request<{ items: OverviewComment[]; nextCursor: string | null }>(d, 'GET', `/v1/me/comments?limit=30${filter === 'all' ? '' : `&filter=${filter}`}${pageParam ? `&cursor=${encodeURIComponent(pageParam)}` : ''}`, { signal }),
     getNextPageParam: l => l.nextCursor ?? null,
   });
 }

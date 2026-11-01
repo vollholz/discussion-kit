@@ -1,7 +1,8 @@
 /**
  * Glocke in der Kopfzeile: Zahl der ungelesenen Benachrichtigungen, Liste im aufklappbaren Bereich (Disclosure, kein
  * Menü: Einträge mit Text und eigene Schaltflächen). Ein Eintrag öffnet sein Ziel (wohin, entscheidet die Shell über
- * `onOpen`) und gilt dann als gelesen. Nicht mehr sichtbare Ziele erscheinen ohne Bezeichnung, Person und Ausschnitt.
+ * `onOpen`) und gilt dann als gelesen. Einträge an Zielen, die die Person nicht (mehr) sieht, erscheinen nicht – es gäbe
+ * nichts zu öffnen und nichts zu erfahren; ungelesene davon gelten als gelesen, damit die Zahl an der Glocke stimmt.
  * Esc und Klick ausserhalb schliessen, der Fokus geht zurück an die Glocke. Mit `onShowAll` führt ein Link unten zur
  * Übersicht der eigenen Kommentare und Erwähnungen (`CommentsOverview`, wohin entscheidet die Shell).
  */
@@ -13,7 +14,6 @@ import { avatarColor, fmtDateTime, Icon, initials, relTime } from './ui.tsx';
 export interface InboxTarget { type: string; id: string }
 
 const WHAT: Record<Notification['kind'], string> = { mention: 'hat dich erwähnt', reply: 'hat auf deinen Kommentar geantwortet' };
-const GONE: Record<Notification['kind'], string> = { mention: 'Du wurdest erwähnt', reply: 'Antwort auf deinen Kommentar' };
 
 export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarget) => void; onShowAll?: () => void }) {
   const { Loading, ErrorBox } = useDiscussion().ui;
@@ -24,7 +24,12 @@ export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarge
   const pop = useRef<HTMLDivElement>(null);
   const id = useId();
   const unread = q.data?.pages[0]?.unread ?? 0;
-  const items = q.data?.pages.flatMap(p => p.items) ?? [];
+  const all = q.data?.pages.flatMap(p => p.items) ?? [];
+  const items = all.filter(n => n.target.available);
+  // Ziel nicht (mehr) sichtbar: als gelesen markieren (einmal je Stand; scheitert es, kein erneuter Versuch in Schleife)
+  const gone = all.filter(n => !n.target.available && !n.readAt).map(n => n.id).join(',');
+  const { mutate } = mark;
+  useEffect(() => { if (gone) mutate({ ids: gone.split(',') }); }, [gone, mutate]);
 
   useEffect(() => {
     if (!open) return;
@@ -42,7 +47,6 @@ export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarge
 
   const pick = (n: Notification) => {
     if (!n.readAt) mark.mutate({ ids: [n.id] });
-    if (!n.target.available) return;
     setOpen(false);
     onOpen({ type: n.target.type, id: n.target.id });
   };
@@ -69,12 +73,10 @@ export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarge
               <ul className="nb-list">
                 {items.map(n => (
                   <li key={n.id}>
-                    <button type="button" className={`nb-item${n.readAt ? '' : ' unread'}`} onClick={() => pick(n)} aria-disabled={!n.target.available || undefined}>
-                      {n.actor ? <span className="dk-avatar" style={{ background: avatarColor(n.actor.id) }} aria-hidden="true">{initials(n.actor.name)}</span> : <span className="dk-avatar nb-none" aria-hidden="true"><Icon name="lock" /></span>}
+                    <button type="button" className={`nb-item${n.readAt ? '' : ' unread'}`} onClick={() => pick(n)}>
+                      {n.actor ? <span className="dk-avatar" style={{ background: avatarColor(n.actor.id) }} aria-hidden="true">{initials(n.actor.name)}</span> : <span className="dk-avatar nb-none" aria-hidden="true"><Icon name="bell" /></span>}
                       <span className="nb-text">
-                        {n.target.available && n.actor
-                          ? <span><b>{n.actor.name}</b> {WHAT[n.kind]} · <span className="nb-target">{n.target.title}</span></span>
-                          : <span>{GONE[n.kind]} – der Eintrag ist für dich nicht mehr sichtbar.</span>}
+                        <span><b>{n.actor?.name ?? 'Jemand'}</b> {WHAT[n.kind]} · <span className="nb-target">{n.target.title}</span></span>
                         {n.subject.excerpt ? <span className="nb-excerpt dk-muted">{n.subject.excerpt}</span> : null}
                         <time className="dk-muted dk-small" dateTime={String(n.createdAt)} title={fmtDateTime(n.createdAt)}>{relTime(n.createdAt)}{n.readAt ? '' : <span className="dk-sr"> · ungelesen</span>}</time>
                       </span>

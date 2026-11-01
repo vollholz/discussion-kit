@@ -69,7 +69,11 @@
 /* Kommentare */
 .discussion { display: flex; flex-direction: column; gap: 14px; }
 .cm-list, .cm-replies, .cm-revs, .up-list, .att-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.cm-replies { margin: 10px 0 0 34px; padding-left: 12px; border-left: 2px solid var(--dk-line); }
+/* Gespräch: Antworten und das Feld «Antworten …» eingerückt unter dem Ausgangskommentar */
+.cm-thread { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 0 34px; padding-left: 12px; border-left: 2px solid var(--dk-line); }
+.cm-reply-prompt { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 10px; border: 1px solid var(--dk-line-2); border-radius: 7px; background: var(--dk-surface); color: var(--dk-fg-3); font: inherit; text-align: left; cursor: text; }
+.cm-reply-prompt:hover { border-color: var(--dk-accent); color: var(--dk-fg-2); }
+.cm-reply-prompt:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 1px; }
 .cm { display: flex; gap: 10px; align-items: flex-start; }
 .cm.deleted { padding: 4px 0 4px 36px; }
 .cm-main { flex: 1; min-width: 0; }
@@ -83,8 +87,9 @@
 .md a { color: var(--dk-accent); text-underline-offset: 2px; }
 .mention { color: var(--dk-accent); background: var(--dk-accent-soft); border-radius: 4px; padding: 0 3px; font-weight: 500; margin-right: 3px; }
 .mention.me { color: var(--dk-accent-fg); background: var(--dk-accent); }
-.cm-compose { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--dk-line); }
-.cm-compose.inline { border-top: 0; padding-top: 0; }
+/* Neues Thema: deutlich abgesetzt vom letzten Gespräch */
+.cm-compose { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding-top: 16px; border-top: 1px solid var(--dk-line); }
+.cm-compose.inline { margin-top: 0; border-top: 0; padding-top: 0; }
 .cm-input { position: relative; background: var(--dk-surface); border-radius: 7px; }
 /* Feld und Hervorhebung dahinter mit gleichen Massen: die Hervorhebung zeigt nur den Hintergrund der Erwähnungen */
 .cm-input textarea, .cm-mirror { box-sizing: border-box; padding: 8px 10px; border: 1px solid transparent; font: inherit; line-height: 1.45; letter-spacing: normal; white-space: pre-wrap; overflow-wrap: break-word; word-break: normal; }
@@ -102,16 +107,27 @@
 
 /* Übersicht: eigene Kommentare und Erwähnungen */
 .co { display: flex; flex-direction: column; gap: 12px; }
-.co-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--dk-line); }
-.co-tab { height: 36px; padding: 0 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; color: var(--dk-fg-2); font: inherit; font-weight: 500; cursor: pointer; }
-.co-tab:hover { color: var(--dk-fg); }
-.co-tab[aria-selected=true] { color: var(--dk-fg); border-bottom-color: var(--dk-accent); }
-.co-tab:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: -2px; border-radius: 6px 6px 0 0; }
-.co-panel { display: flex; flex-direction: column; gap: 12px; }
-.co-list { list-style: none; margin: 0; padding: 0; }
-.co-list > li + li { border-top: 1px solid var(--dk-line); }
-.co-item { padding: 10px 0; }
-.co-target { color: var(--dk-fg); font-weight: 500; }
+.co-filter { display: flex; flex-wrap: wrap; gap: 6px; }
+.co-chip { height: 30px; padding: 0 12px; border: 1px solid var(--dk-line-2); border-radius: 15px; background: var(--dk-surface); color: var(--dk-fg-2); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.co-chip:hover { background: var(--dk-hover); color: var(--dk-fg); }
+.co-chip[aria-pressed=true] { background: var(--dk-accent-soft); border-color: var(--dk-accent); color: var(--dk-accent); }
+.co-chip:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 2px; }
+.co-list { list-style: none; margin: 0 -10px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+/* Ganzer Eintrag klickbar (Maus); Tastatur über den Knopf mit dem Ziel */
+.co-item { padding: 10px; border-radius: 10px; cursor: pointer; }
+.co-item:hover { background: var(--dk-hover); }
+.co-item:has(.co-target:focus-visible) { background: var(--dk-hover); }
+.co-target { padding: 0; border: 0; background: none; font: inherit; font-size: 15px; font-weight: 600; color: var(--dk-fg); cursor: pointer; text-align: left; }
+.co-item:hover .co-target { color: var(--dk-accent); }
+.co-target:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 2px; border-radius: 3px; }
+.co-how { display: flex; align-items: center; gap: 5px; }
+.co-how .dk-ico { width: 13px; height: 13px; }
+.co-how.is-mention .dk-ico { color: var(--dk-accent); }
+.co-who { color: var(--dk-fg); font-weight: 600; }
+.co-text { margin-top: 2px; }
+.co-go { align-self: center; display: grid; place-items: center; color: var(--dk-fg-3); transition: transform .15s, color .15s; }
+.co-item:hover .co-go { color: var(--dk-accent); transform: translateX(2px); }
+@media (prefers-reduced-motion: reduce) { .co-go { transition: none; } }
 /* Anfang des Textes; ganz lesen am Ziel */
 .co-text .md { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden; }
 .co-more { align-self: flex-start; }
@@ -142,7 +158,6 @@
 .nb-list { list-style: none; margin: 0; padding: 4px; overflow: auto; }
 .nb-item { display: flex; gap: 10px; width: 100%; padding: 8px; border: 0; background: none; border-radius: 8px; text-align: left; color: inherit; font: inherit; font-size: 13.5px; cursor: pointer; }
 .nb-item:hover { background: var(--dk-hover); }
-.nb-item[aria-disabled=true] { cursor: default; }
 .nb-item.unread { background: var(--dk-accent-soft); }
 .nb-item.unread:hover { background: var(--dk-hover); }
 .nb-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

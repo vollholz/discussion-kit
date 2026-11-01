@@ -177,7 +177,7 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
     assert.equal((await call(ada, 'GET', `/v1/comments/${c.id}`)).status, 404);
   });
 
-  test('Übersicht: eigene Kommentare und Erwähnungen über alle Ziele, nur sichtbare, seitenweise', async () => {
+  test('Übersicht: eigene Kommentare und Erwähnungen in einer Liste über alle Ziele, nur sichtbare, seitenweise', async () => {
     const helm = (await admin.query(`INSERT INTO shop.item (tenant_id, name) VALUES ($1, 'Helm') RETURNING id`, [A])).rows[0].id as string;
     const secret = (await admin.query(`INSERT INTO shop.item (tenant_id, name) VALUES ($1, 'Geheim') RETURNING id`, [A])).rows[0].id as string;
     const post = async (who: string, item: string, body: string) => {
@@ -190,13 +190,13 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
     const onSecret = await post(ada, secret, `@[Carl](${carl}) nur für Ada sichtbar`);
     const removed = await post(ada, helm, 'wird gelöscht');
     assert.equal((await call(ada, 'DELETE', `/v1/comments/${removed.id}`)).status, 204);
-    type Item = { id: string; targetType: string; targetId: string; targetTitle: string; author: { name: string }; body: string; replyCount: number };
-    /** Alle Seiten mit kleiner Seitengrösse (prüft den Cursor). */
-    const all = async (who: string, path: string, limit: number) => {
+    type Item = { id: string; involvement: string; targetType: string; targetId: string; targetTitle: string; author: { name: string }; body: string; replyCount: number };
+    /** Alle Seiten mit kleiner Seitengrösse (prüft den Cursor); `filter` wie die API. */
+    const all = async (who: string, filter: 'mine' | 'mentions' | null, limit: number) => {
       const out: Item[] = [];
       let cursor: string | null = null;
       do {
-        const r = await call(who, 'GET', `${path}?limit=${limit}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
+        const r = await call(who, 'GET', `/v1/me/comments?limit=${limit}${filter ? `&filter=${filter}` : ''}${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`);
         assert.equal(r.status, 200, JSON.stringify(r.body));
         out.push(...r.body.items);
         cursor = r.body.nextCursor;
@@ -205,25 +205,31 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
     };
 
     // Carl: nur die Erwähnung am sichtbaren Ziel; die neuere am Ziel «Geheim» fällt weg, ohne die Seite zu leeren
-    const carlFirst = (await call(carl, 'GET', '/v1/me/mentions?limit=1')).body;
-    assert.deepEqual(carlFirst.items.map((i: Item) => [i.id, i.targetTitle, i.author.name]), [[onHelm.id, 'Helm', 'Ada']]);
+    const carlFirst = (await call(carl, 'GET', '/v1/me/comments?limit=1')).body;
+    assert.deepEqual(carlFirst.items.map((i: Item) => [i.id, i.involvement, i.targetTitle, i.author.name]), [[onHelm.id, 'mention', 'Helm', 'Ada']]);
     assert.equal(carlFirst.nextCursor, null);
     // Ada: eigene Kommentare an allen Zielen, die sie sieht, neueste zuerst, ohne gelöschte; Antworten gezählt
-    const mine = await all(ada, '/v1/me/comments', 2);
+    const mine = await all(ada, 'mine', 2);
     assert.deepEqual(mine.slice(0, 3).map(i => i.targetTitle), ['Geheim', 'Helm', 'Helm']);
+    assert.ok(mine.every(i => i.involvement === 'author'));
     assert.ok(mine.some(i => i.id === onSecret.id));
     assert.ok(!mine.some(i => i.id === removed.id || i.body === 'bald weg'), 'gelöschte nicht');
     const hallo = mine.find(i => i.body.startsWith('Hallo'))!;
     assert.deepEqual([hallo.targetTitle, hallo.replyCount], ['Velo', 1]);
     assert.equal(new Set(mine.map(i => i.id)).size, mine.length, 'keine doppelten Einträge über Seiten');
-    // Eigene Erwähnung zählt nicht; Bea sieht die Erwähnung von Ada
-    assert.deepEqual(await all(ada, '/v1/me/mentions', 5), []);
-    assert.deepEqual((await all(bea, '/v1/me/mentions', 5)).map(i => [i.targetTitle, i.author.name]), [['Velo', 'Ada']]);
+    // Eigene Erwähnung ist keine Erwähnung und erscheint in der ganzen Liste nur einmal (als eigener Kommentar)
+    assert.deepEqual(await all(ada, 'mentions', 5), []);
+    assert.deepEqual((await all(ada, null, 2)).map(i => i.id), mine.map(i => i.id));
+    // Bea: eigene Antwort und Erwähnung von Ada in einer Liste, neueste zuerst; Filter grenzen ein
+    assert.deepEqual((await all(bea, null, 1)).map(i => [i.involvement, i.targetTitle, i.author.name]), [['author', 'Velo', 'Bea'], ['mention', 'Velo', 'Ada']]);
+    assert.deepEqual((await all(bea, 'mentions', 5)).map(i => [i.targetTitle, i.author.name]), [['Velo', 'Ada']]);
+    assert.deepEqual((await all(bea, 'mine', 5)).map(i => i.body), ['Danke']);
     // Erwähnung entfernt (Bearbeitung): verschwindet aus der Übersicht
     assert.equal((await call(ada, 'PATCH', `/v1/comments/${onHelm.id}`, { body: 'schau dir den Helm an' })).status, 200);
-    assert.deepEqual(await all(carl, '/v1/me/mentions', 5), []);
-    // Anderer Mandant: nichts
-    assert.deepEqual(await all(gus, '/v1/me/comments', 5), []);
+    assert.deepEqual(await all(carl, null, 5), []);
+    // Anderer Mandant: nichts; ungültige Angaben 4xx
+    assert.deepEqual(await all(gus, null, 5), []);
     assert.equal((await call(ada, 'GET', '/v1/me/comments?cursor=kaputt')).status, 422);
+    assert.equal((await call(ada, 'GET', '/v1/me/comments?filter=andere')).status, 400);
   });
 });

@@ -19,6 +19,6 @@ export { CommentText, safeUrl } from './markdown.tsx';
 export type { DiscussionCan } from './can.ts';
 export {
   contentUrl, dkKeys, mentionToken, request, uploadAttachment, useAttachments, useCommentMutations, useCommentOverview, useComments, useDeleteAttachment, useDiscussionCounts,
-  useMarkRead, useNotifications, type Attachment, type Comment, type Notification, type OverviewComment, type OverviewView, type PersonRef, type Revision, type Target,
+  useMarkRead, useNotifications, type Attachment, type Comment, type Notification, type OverviewComment, type OverviewFilter, type PersonRef, type Revision, type Target,
 } from './api.ts';
 export { DiscussionApiError, fmtBytes, Icon, type DiscussionComponents } from './ui.tsx';
