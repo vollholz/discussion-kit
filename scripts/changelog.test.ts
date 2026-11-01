@@ -12,6 +12,14 @@ const text = `# Changelog
 
 ## [2.0.0] – 2026-10-28
 
+### Für Nutzer
+
+- (keine)
+
+### Für den Betrieb
+
+- Migration läuft automatisch.
+
 ### Breaking
 
 - A entfällt. Migration: B nehmen.
@@ -26,7 +34,7 @@ const pkg = (version: string) => ({ dir: 'packages/x', name: '@vollholz/x', vers
 
 test('Abschnitte je Version, ohne «Unveröffentlicht» und Linkverweise', () => {
   assert.deepEqual(sections(text).map(s => [s.version, s.date]), [['2.0.0', '2026-10-28'], ['1.0.0', '2026-01-01']]);
-  assert.equal(sections(text)[0]!.body, '### Breaking\n\n- A entfällt. Migration: B nehmen.');
+  assert.match(sections(text)[0]!.body, /^### Für Nutzer\n\n- \(keine\)\n\n### Für den Betrieb\n\n.*### Breaking\n\n- A entfällt\. Migration: B nehmen\.$/s);
   assert.equal(sections(text)[1]!.body, 'Stand bis 1.0.0, ohne Einzelnachweis.');
 });
 
@@ -42,7 +50,7 @@ test('fehlende Datei, leerer Abschnitt, ohne Datum, nicht zuoberst, kleinere Ver
   assert.match(problems(pkg('1.0.0'), null, null)[0]!, /CHANGELOG\.md fehlt/);
   assert.match(problems(pkg('3.0.0'), '## [3.0.0] – 2026-10-28\n\n## [2.0.0] – 2026-10-01\n\nx\n', null)[0]!, /ist leer/);
   assert.match(problems(pkg('3.0.0'), '## [3.0.0]\n\nx\n', null)[0]!, /ohne Datum/);
-  assert.match(problems(pkg('1.0.0'), text, null)[0]!, /nicht zuoberst/);
+  assert.match(problems(pkg('1.0.0'), text, null).join('\n'), /nicht zuoberst/);
   assert.match(problems(pkg('2.0.0'), text, '2.1.0').join('\n'), /kleiner als im Basis-Stand/);
 });
 
@@ -55,4 +63,12 @@ test('Vergleich nach SemVer', () => {
   assert.equal(compareVersions('1.0.0-alpha', '1.0.0-alpha.1'), -1, 'längere Liste hat Vorrang');
   assert.equal(compareVersions('1.0.0-1', '1.0.0-alpha'), -1, 'numerisch vor alphanumerisch');
   assert.equal(compareVersions('1.0.0-beta', '1.0.0-alpha.9'), 1);
+});
+
+test('Unterabschnitte «Für Nutzer» und «Für den Betrieb»: fehlend, leer, nicht zuerst', () => {
+  const v = (body: string) => problems(pkg('3.0.0'), `## [3.0.0] – 2026-11-01\n\n${body}\n`, null);
+  assert.deepEqual(v('### Für Nutzer\n\n- Neu: X.\n\n### Für den Betrieb\n\n(keine)\n\n### Behoben\n\n- y'), []);
+  assert.match(v('### Behoben\n\n- y').join('\n'), /ohne «### Für Nutzer».*\n.*ohne «### Für den Betrieb»/);
+  assert.match(v('### Für Nutzer\n\n### Für den Betrieb\n\n(keine)').join('\n'), /«### Für Nutzer» in 3\.0\.0 ist leer/);
+  assert.match(v('### Behoben\n\n- y\n\n### Für Nutzer\n\n(keine)\n\n### Für den Betrieb\n\n(keine)').join('\n'), /beginnt nicht mit «### Für Nutzer»/);
 });
