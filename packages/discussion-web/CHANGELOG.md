@@ -9,6 +9,29 @@ folgen die Angaben für die Entwickler der App. Sammeln für eine App: `npx disc
 
 ## [Unveröffentlicht]
 
+## [1.2.0] – 2026-11-01
+
+### Für Nutzer
+
+- Ein Klick auf einen Eintrag der Übersicht «Kommentare und Erwähnungen» oder auf eine Benachrichtigung führt direkt
+  zum Kommentar: Die Liste scrollt zu ihm und hebt ihn kurz hervor, auch wenn er weiter hinten steht.
+
+### Für den Betrieb
+
+- (keine)
+
+### Hinzugefügt
+
+- `CommentsPanel`: optional `commentId`. Die Liste lädt Seiten nach, bis der Kommentar geladen ist, scrollt ihn in die
+  Mitte, hebt ihn hervor (Klasse `focused`, `aria-current`) und setzt den Fokus darauf, einmal je ID. Fehlt er, bleibt
+  die Liste, wie sie ist. Die App reicht die ID aus `onOpen` von `CommentsOverview` bzw. `NotificationBell` weiter,
+  z. B. über die Adresse.
+
+### Geändert
+
+- `NotificationBell`: `onOpen` erhält als zweites Argument die ID des Kommentars (wie bei `CommentsOverview`).
+  Bestehende Handler mit einem Argument funktionieren unverändert.
+
 ## [1.1.0] – 2026-11-01
 
 ### Für Nutzer

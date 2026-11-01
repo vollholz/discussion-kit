@@ -76,6 +76,13 @@
 .cm-reply-prompt:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 1px; }
 .cm { display: flex; gap: 10px; align-items: flex-start; }
 .cm.deleted { padding: 4px 0 4px 36px; }
+/* Ziel eines Sprungs (Übersicht, Glocke): kurz hervorgehoben, danach nur noch der Fokusrahmen */
+.cm.focused { margin: -6px; padding: 6px; border-radius: 8px; animation: dk-flash 2.4s ease-out; }
+.cm.deleted.focused { padding-left: 42px; }
+.cm.focused:focus { outline: none; }
+.cm.focused:focus-visible { outline: 2px solid var(--dk-accent); outline-offset: 1px; }
+@keyframes dk-flash { from, 40% { background: color-mix(in srgb, var(--dk-accent) 16%, transparent); } to { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .cm.focused { animation: none; background: color-mix(in srgb, var(--dk-accent) 10%, transparent); } }
 .cm-main { flex: 1; min-width: 0; }
 .cm-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .cm-actions { display: flex; gap: 2px; margin-top: 2px; margin-left: -9px; }

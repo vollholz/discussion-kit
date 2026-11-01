@@ -5,6 +5,9 @@
  * Verlauf früherer Stände, Löschen (eigene oder mit Moderationsrecht). Text wird ohne HTML dargestellt (markdown.tsx).
  * Rechte am Ziel (`can.comment`, `can.moderateComments`: Rolle, Freigaben und Verbote je Bereich), wie die API sie
  * beim Speichern prüft; ohne `can` gilt das Recht auf Ebene der Organisation.
+ * Mit `commentId` springt die Liste zu diesem Kommentar (z. B. aus der Übersicht oder der Glocke): Sie lädt weitere
+ * Seiten, bis er geladen ist, scrollt ihn in die Mitte, hebt ihn kurz hervor und setzt den Fokus darauf. Das geschieht
+ * einmal je ID, nicht bei jedem Neuladen. Fehlt der Kommentar (gelöscht, nicht sichtbar), bleibt die Liste, wie sie ist.
  */
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -18,9 +21,10 @@ const MAX = 10_000;
 /** «@» am Wortanfang bis zur Schreibmarke, danach höchstens 40 Zeichen ohne Zeilenumbruch und ohne weiteres @. */
 const TRIGGER = /(^|[\s(])@([^\s@[\]()]{0,40}(?: [^\s@[\]()]{0,40})?)$/;
 
-export function CommentsPanel({ target, can: caps }: { target: Target; can?: DiscussionCan }) {
+export function CommentsPanel({ target, can: caps, commentId }: { target: Target; can?: DiscussionCan; commentId?: string | null }) {
   const d = useDiscussion();
   const q = useComments(target);
+  const jump = useJump(q, commentId);
   const text = d.targets[target.type]!;
   const can = d.can;
   const { Loading, ErrorBox, Empty, MissingRight } = d.ui;
@@ -34,7 +38,7 @@ export function CommentsPanel({ target, can: caps }: { target: Target; can?: Dis
   const roots = all.filter(c => !c.replyTo || !all.some(r => r.id === c.replyTo));
   const replies = (id: string) => all.filter(c => c.replyTo === id);
   return (
-    <div className="discussion">
+    <div className="discussion" ref={jump.root}>
       {all.length ? (
         <ol className="cm-list" aria-label="Kommentare">
           {roots.map(c => {
@@ -43,12 +47,12 @@ export function CommentsPanel({ target, can: caps }: { target: Target; can?: Dis
             const base = c.deleted ? rs.filter(r => !r.deleted).at(-1) : c;
             return (
               <li key={c.id}>
-                <CommentItem c={c} me={me} target={target} write={write} moderate={moderate} />
+                <CommentItem c={c} me={me} target={target} write={write} moderate={moderate} focused={jump.id === c.id} />
                 {rs.length || (write && base) ? (
                   <div className="cm-thread">
                     {rs.length ? (
                       <ol className="cm-replies" aria-label={`Antworten an ${c.author.name}`}>
-                        {rs.map(r => <li key={r.id}><CommentItem c={r} me={me} target={target} write={write} moderate={moderate} /></li>)}
+                        {rs.map(r => <li key={r.id}><CommentItem c={r} me={me} target={target} write={write} moderate={moderate} focused={jump.id === r.id} /></li>)}
                       </ol>
                     ) : null}
                     {write && base ? (replyTo?.id === base.id
@@ -69,19 +73,50 @@ export function CommentsPanel({ target, can: caps }: { target: Target; can?: Dis
   );
 }
 
-function CommentItem({ c, me, target, write, moderate }: { c: Comment; me: string | null; target: Target; write: boolean; moderate: boolean }) {
+/**
+ * Sprung zu einem Kommentar: lädt Seiten nach, bis er da ist, dann einmal scrollen und fokussieren. `id` ist der
+ * hervorgehobene Kommentar, erst gesetzt, wenn er gefunden ist.
+ */
+function useJump(q: ReturnType<typeof useComments>, commentId: string | null | undefined) {
+  const root = useRef<HTMLDivElement>(null);
+  const done = useRef<string | null>(null);
+  const [id, setId] = useState<string | null>(null);
+  const { data, hasNextPage, isFetchingNextPage, fetchNextPage } = q;
+  useEffect(() => {
+    if (!commentId || !data || done.current === commentId) return;
+    if (!data.pages.some(p => p.items.some(c => c.id === commentId))) {
+      if (!hasNextPage) done.current = commentId;
+      else if (!isFetchingNextPage) void fetchNextPage();
+      return;
+    }
+    done.current = commentId;
+    setId(commentId);
+  }, [commentId, data, hasNextPage, isFetchingNextPage, fetchNextPage]);
+  useEffect(() => {
+    if (!id) return;
+    const el = root.current?.querySelector<HTMLElement>(`[data-comment-id="${CSS.escape(id)}"]`);
+    if (!el) return;
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView?.({ block: 'center', behavior: still ? 'auto' : 'smooth' });
+    el.focus({ preventScroll: true });
+  }, [id]);
+  return { root, id };
+}
+
+function CommentItem({ c, me, target, write, moderate, focused }: { c: Comment; me: string | null; target: Target; write: boolean; moderate: boolean; focused?: boolean }) {
   const toast = useToaster();
   const { Confirm } = useDiscussion().ui;
   const m = useCommentMutations(target);
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [showRevs, setShowRevs] = useState(false);
-  if (c.deleted) return <article className="cm deleted" aria-label="Gelöschter Kommentar"><p className="dk-muted dk-small">Kommentar gelöscht</p></article>;
+  const jump = { 'data-comment-id': c.id, ...(focused ? { tabIndex: -1, 'aria-current': true as const } : {}) };
+  if (c.deleted) return <article className={`cm deleted${focused ? ' focused' : ''}`} aria-label="Gelöschter Kommentar" {...jump}><p className="dk-muted dk-small">Kommentar gelöscht</p></article>;
   const mine = !!me && c.author.id === me;
   const canEdit = mine && write;
   const canDelete = canEdit || moderate;
   return (
-    <article className="cm" aria-label={`Kommentar von ${c.author.name}`}>
+    <article className={`cm${focused ? ' focused' : ''}`} aria-label={`Kommentar von ${c.author.name}`} {...jump}>
       <span className="dk-avatar" style={{ background: avatarColor(c.author.id) }} aria-hidden="true">{initials(c.author.name)}</span>
       <div className="cm-main">
         <div className="cm-head">

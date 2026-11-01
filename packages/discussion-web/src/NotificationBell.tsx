@@ -1,7 +1,7 @@
 /**
  * Glocke in der Kopfzeile: Zahl der ungelesenen Benachrichtigungen, Liste im aufklappbaren Bereich (Disclosure, kein
  * Menü: Einträge mit Text und eigene Schaltflächen). Ein Eintrag öffnet sein Ziel (wohin, entscheidet die Shell über
- * `onOpen`) und gilt dann als gelesen. Einträge an Zielen, die die Person nicht (mehr) sieht, erscheinen nicht – es gäbe
+ * `onOpen`, mit der ID des Kommentars für `CommentsPanel commentId`) und gilt dann als gelesen. Einträge an Zielen, die die Person nicht (mehr) sieht, erscheinen nicht – es gäbe
  * nichts zu öffnen und nichts zu erfahren; ungelesene davon gelten als gelesen, damit die Zahl an der Glocke stimmt.
  * Esc und Klick ausserhalb schliessen, der Fokus geht zurück an die Glocke. Mit `onShowAll` führt ein Link unten zur
  * Übersicht der eigenen Kommentare und Erwähnungen (`CommentsOverview`, wohin entscheidet die Shell).
@@ -15,7 +15,7 @@ export interface InboxTarget { type: string; id: string }
 
 const WHAT: Record<Notification['kind'], string> = { mention: 'hat dich erwähnt', reply: 'hat auf deinen Kommentar geantwortet' };
 
-export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarget) => void; onShowAll?: () => void }) {
+export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarget, commentId: string) => void; onShowAll?: () => void }) {
   const { Loading, ErrorBox } = useDiscussion().ui;
   const q = useNotifications();
   const mark = useMarkRead();
@@ -48,7 +48,7 @@ export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarge
   const pick = (n: Notification) => {
     if (!n.readAt) mark.mutate({ ids: [n.id] });
     setOpen(false);
-    onOpen({ type: n.target.type, id: n.target.id });
+    onOpen({ type: n.target.type, id: n.target.id }, n.subject.id);
   };
 
   return (
