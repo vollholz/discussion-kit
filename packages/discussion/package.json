@@ -1,12 +1,17 @@
 {
   "name": "@vollholz/discussion",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Kommentare, Anhänge und Benachrichtigungen an beliebigen Zielen einer App: Migrationen, Fastify-Plugin, Ablage, Verschlüsselung",
   "type": "module",
   "license": "Apache-2.0",
   "repository": { "type": "git", "url": "https://github.com/vollholz/discussion-kit.git", "directory": "packages/discussion" },
   "engines": { "node": ">=24" },
-  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" }, "./package.json": "./package.json" },
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./release-notes": { "types": "./dist/release-notes.d.ts", "default": "./dist/release-notes.js" },
+    "./package.json": "./package.json"
+  },
+  "bin": { "discussion-notes": "./dist/notes-cli.js" },
   "files": ["dist", "migrations", "README.md", "CHANGELOG.md", "LICENSE", "NOTICE"],
   "publishConfig": { "registry": "https://npm.pkg.github.com" },
   "scripts": {
