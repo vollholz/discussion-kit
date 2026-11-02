@@ -9,6 +9,8 @@ folgen die Angaben für die Entwickler der App. Sammeln für eine App: `npx disc
 
 ## [Unveröffentlicht]
 
+## [1.3.0] – 2026-11-02
+
 ### Für Nutzer
 
 - Die Glocke zeigt auch Benachrichtigungen aus anderen Bereichen der App (z. B. eine zugewiesene Aufgabe) mit eigenem
