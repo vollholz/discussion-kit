@@ -102,7 +102,10 @@ Bearbeiten nur durch die Autorin bzw. den Autor, mit `If-Match`/ETag. Der alte S
 gehen eine Ebene tief.
 
 Benachrichtigungen (`notifications` in `DiscussionOptions`): Standard ist die Inbox des Pakets (`/v1/me/notifications`),
-eine eigene `Notify`-Funktion leitet an die App weiter, `false` schaltet sie ab.
+eine eigene `Notify`-Funktion leitet an die App weiter, `false` schaltet sie ab. `discussionInbox({ kinds, subjects })`
+öffnet die Inbox für Arten anderer Bausteine (`inbox.notify(tx, …)`, Auflösung je Art von Gegenstand über
+`InboxSubject.load`); die Oberfläche stellt sie über `notificationKinds` im Provider dar. Das Paket kennt deren
+Bedeutung nicht.
 
 ### Vertrag Backend ↔ Oberfläche
 

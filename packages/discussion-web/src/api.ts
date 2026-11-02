@@ -20,10 +20,14 @@ export interface Attachment {
   name: string; size: number; mediaType: string; sha256: string; uploadedBy: PersonRef | null; uploadedAt: string; preview: boolean;
 }
 export interface Revision { revision: number; body: string; mentions: PersonRef[]; writtenAt: string; replacedAt: string }
+/**
+ * Eintrag der Inbox. `kind` ist `mention` oder `reply` (Kommentare) oder eine Art, die die App registriert hat (z. B.
+ * `task_assigned`, Text über `notificationKinds`); `subject.type` entsprechend `comment` oder z. B. `task`.
+ */
 export interface Notification {
-  id: string; kind: 'mention' | 'reply'; createdAt: string; readAt: string | null; actor: PersonRef | null;
+  id: string; kind: 'mention' | 'reply' | (string & {}); createdAt: string; readAt: string | null; actor: PersonRef | null;
   target: { type: string; id: string; title: string | null; available: boolean };
-  subject: { type: 'comment'; id: string; excerpt: string | null };
+  subject: { type: 'comment' | (string & {}); id: string; excerpt: string | null };
 }
 /** Kommentar in der Übersicht der angemeldeten Person: selbst geschrieben (`author`) oder erwähnt (`mention`). */
 export interface OverviewComment extends Comment { involvement: 'author' | 'mention'; targetTitle: string; replyCount: number }

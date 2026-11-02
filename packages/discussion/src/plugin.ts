@@ -17,7 +17,7 @@ import { commentExcerpt, registerComments } from './comments.ts';
 import type { Keyring } from './crypto.ts';
 import { hostKit, type DiscussionHost, type HostKit } from './host.ts';
 import { ident } from './http.ts';
-import { inboxNotify, registerNotifications } from './notifications.ts';
+import { discussionInbox, inboxNotify, registerNotifications, type DiscussionInbox } from './notifications.ts';
 import type { Scanner } from './scan.ts';
 import type { BlobStore } from './storage.ts';
 import { Targets, type DiscussionTarget, type Notify } from './targets.ts';
@@ -51,10 +51,11 @@ export interface DiscussionOptions {
   /** Anhänge; ohne diese Angabe gibt es keine Routen für Anhänge. */
   attachments?: AttachmentOptions;
   /**
-   * Benachrichtigungen: Standard die Inbox des Pakets (`/v1/me/notifications`). Eigene Funktion = Einträge gehen an die
+   * Benachrichtigungen: Standard die Inbox des Pakets (`/v1/me/notifications`). `discussionInbox({ schema, kinds,
+   * subjects })` = dieselbe Inbox mit weiteren Arten anderer Bausteine der App. Eigene Funktion = Einträge gehen an die
    * App (keine Routen der Inbox); `false` = keine Benachrichtigungen.
    */
-  notifications?: Notify | false;
+  notifications?: DiscussionInbox | Notify | false;
 }
 
 /** Was die Routen brauchen (intern). */
@@ -71,7 +72,12 @@ export interface Ctx {
 export function discussion(o: DiscussionOptions): FastifyPluginAsync {
   const schema = ident(o.schema, 'schema');
   const targets = new Targets(o.targets);
-  const notify = o.notifications === false ? undefined : o.notifications ?? inboxNotify(schema);
+  const own = typeof o.notifications === 'function' ? o.notifications : undefined;
+  const inbox = o.notifications === false || typeof o.notifications === 'function' ? undefined : o.notifications ?? discussionInbox({ schema });
+  if (inbox && inbox.schema !== schema) throw new Error(`discussionInbox: Schema «${inbox.schema}» statt «${schema}»`);
+  // Kommentare prüfen Empfänger selbst (Erwähnbare, nicht an sich selbst): direkt eintragen
+  const insert = inboxNotify(schema);
+  const notify: Notify | undefined = own ?? (inbox ? async (tx, n) => { await insert(tx, n); } : undefined);
   return async instance => {
     const c: Ctx = {
       app: instance.withTypeProvider<TypeBoxTypeProvider>(), k: hostKit(o.host), host: o.host, targets, schema, notify,
@@ -84,6 +90,6 @@ export function discussion(o: DiscussionOptions): FastifyPluginAsync {
     };
     registerComments(c);
     if (c.attachments) registerAttachments(c);
-    if (o.notifications === undefined) registerNotifications(c, commentExcerpt(schema));
+    if (inbox) registerNotifications(c, commentExcerpt(schema), inbox);
   };
 }

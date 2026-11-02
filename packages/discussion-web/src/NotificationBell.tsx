@@ -5,18 +5,35 @@
  * nichts zu öffnen und nichts zu erfahren; ungelesene davon gelten als gelesen, damit die Zahl an der Glocke stimmt.
  * Esc und Klick ausserhalb schliessen, der Fokus geht zurück an die Glocke. Mit `onShowAll` führt ein Link unten zur
  * Übersicht der eigenen Kommentare und Erwähnungen (`CommentsOverview`, wohin entscheidet die Shell).
+ *
+ * Weitere Arten anderer Bausteine (z. B. `task_assigned`) stellt die App über `notificationKinds` im Provider dar;
+ * unbekannte Arten erscheinen mit einem allgemeinen Text. `onOpen` bekommt als dritten Wert den ganzen Eintrag, damit
+ * die Shell nach Art des Gegenstands (`subject.type`) entscheiden kann.
  */
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useMarkRead, useNotifications, type Notification } from './api.ts';
-import { useDiscussion } from './config.tsx';
+import { useDiscussion, type NotificationKind } from './config.tsx';
 import { avatarColor, fmtDateTime, Icon, initials, relTime } from './ui.tsx';
 
 export interface InboxTarget { type: string; id: string }
 
-const WHAT: Record<Notification['kind'], string> = { mention: 'hat dich erwähnt', reply: 'hat auf deinen Kommentar geantwortet' };
+const WHAT: Record<string, string> = { mention: 'hat dich erwähnt', reply: 'hat auf deinen Kommentar geantwortet' };
 
-export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarget, commentId: string) => void; onShowAll?: () => void }) {
-  const { Loading, ErrorBox } = useDiscussion().ui;
+/** Zeile eines Eintrags: Art der App, eingebaute Art (Kommentare) oder allgemeiner Text. */
+function line(n: Notification, kinds: Record<string, NotificationKind>): ReactNode {
+  const own = Object.hasOwn(kinds, n.kind) ? kinds[n.kind] : undefined;
+  if (own) return own.text(n);
+  const what = Object.hasOwn(WHAT, n.kind) ? WHAT[n.kind] : undefined;
+  if (what) return <><b>{n.actor?.name ?? 'Jemand'}</b> {what}</>;
+  return n.actor ? <>Neue Benachrichtigung von <b>{n.actor.name}</b></> : 'Neue Benachrichtigung';
+}
+
+export function NotificationBell({ onOpen, onShowAll }: {
+  /** Eintrag öffnen: Ziel, ID des Gegenstands (bei Kommentaren die ID des Kommentars) und der ganze Eintrag. */
+  onOpen: (t: InboxTarget, subjectId: string, n: Notification) => void;
+  onShowAll?: () => void;
+}) {
+  const { ui: { Loading, ErrorBox }, notificationKinds } = useDiscussion();
   const q = useNotifications();
   const mark = useMarkRead();
   const [open, setOpen] = useState(false);
@@ -48,7 +65,7 @@ export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarge
   const pick = (n: Notification) => {
     if (!n.readAt) mark.mutate({ ids: [n.id] });
     setOpen(false);
-    onOpen({ type: n.target.type, id: n.target.id }, n.subject.id);
+    onOpen({ type: n.target.type, id: n.target.id }, n.subject.id, n);
   };
 
   return (
@@ -71,18 +88,21 @@ export function NotificationBell({ onOpen, onShowAll }: { onOpen: (t: InboxTarge
             : !items.length ? <p className="nb-empty dk-muted dk-small">Keine Benachrichtigungen. Wenn dich jemand in einem Kommentar erwähnt oder dir antwortet, erscheint es hier.</p>
             : (
               <ul className="nb-list">
-                {items.map(n => (
+                {items.map(n => {
+                  const icon = Object.hasOwn(notificationKinds, n.kind) ? notificationKinds[n.kind]?.icon : undefined;
+                  return (
                   <li key={n.id}>
                     <button type="button" className={`nb-item${n.readAt ? '' : ' unread'}`} onClick={() => pick(n)}>
-                      {n.actor ? <span className="dk-avatar" style={{ background: avatarColor(n.actor.id) }} aria-hidden="true">{initials(n.actor.name)}</span> : <span className="dk-avatar nb-none" aria-hidden="true"><Icon name="bell" /></span>}
+                      {n.actor && !icon ? <span className="dk-avatar" style={{ background: avatarColor(n.actor.id) }} aria-hidden="true">{initials(n.actor.name)}</span> : <span className="dk-avatar nb-none" aria-hidden="true">{icon ?? <Icon name="bell" />}</span>}
                       <span className="nb-text">
-                        <span><b>{n.actor?.name ?? 'Jemand'}</b> {WHAT[n.kind]} · <span className="nb-target">{n.target.title}</span></span>
+                        <span>{line(n, notificationKinds)} · <span className="nb-target">{n.target.title}</span></span>
                         {n.subject.excerpt ? <span className="nb-excerpt dk-muted">{n.subject.excerpt}</span> : null}
                         <time className="dk-muted dk-small" dateTime={String(n.createdAt)} title={fmtDateTime(n.createdAt)}>{relTime(n.createdAt)}{n.readAt ? '' : <span className="dk-sr"> · ungelesen</span>}</time>
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           {q.hasNextPage ? <button type="button" className="dk-btn sm ghost nb-more" onClick={() => void q.fetchNextPage()} disabled={q.isFetchingNextPage}>{q.isFetchingNextPage ? 'Lädt …' : 'Ältere laden'}</button> : null}

@@ -70,6 +70,37 @@ const host: DiscussionHost = {
 };
 ```
 
+**Weitere Arten in der Inbox** – andere Bausteine der App (z. B. ein Workflow-Modul) melden eigene Arten in dieselbe
+Glocke. Die App registriert Arten und je Art von Gegenstand eine Auflösung (wie `load` der Zieltypen) und reicht die
+Inbox an den meldenden Baustein:
+
+```ts
+import { discussion, discussionInbox } from '@vollholz/discussion';
+
+const inbox = discussionInbox({
+  schema: 'shop',
+  kinds: ['task_assigned', 'approval_requested', 'sla_breached', 'run_failed'],
+  subjects: {
+    // Bezeichnung und Kurztext mit den Rechten der empfangenden Person; null = «nicht mehr verfügbar»
+    task: { load: async (req, tx, ref) => loadTask(req, tx, ref.subjectId) },
+  },
+});
+await app.register(discussion({ schema: 'shop', host, targets, notifications: inbox }));
+
+// im anderen Baustein, in dessen Transaktion (Mandantenkontext gesetzt):
+await inbox.notify(tx, {
+  tenantId, actorId: me.id,                       // null für Einträge ohne Person (z. B. Frist überschritten)
+  recipients: [{ id: assignee, kind: 'task_assigned' }],
+  targetType: 'case', targetId: caseId,           // wohin die Glocke führt
+  subjectType: 'task', subjectId: taskId,
+});
+```
+
+Regeln wie bei Kommentaren: nicht an die auslösende Person, nur an Personen (keine Clients), die es noch gibt, je
+Person, Art und Gegenstand ein Eintrag. Arten und Arten von Gegenständen: a–z und «_», höchstens 40 Zeichen
+(Migration `discussion_003`); nicht registrierte sind ein Fehler. `comment` löst das Paket selbst auf. Die Oberfläche
+zeigt registrierte Arten über `notificationKinds` (README von `@vollholz/discussion-web`).
+
 ### 3. Rechte
 
 `comment:write`, `comment:moderate`, `attachment:write`, `attachment:delete` den Rollen der App geben

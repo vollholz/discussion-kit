@@ -1,4 +1,4 @@
-/** Glocke in der Kopfzeile: Zahl der ungelesenen, Liste, Ziel öffnen und als gelesen markieren, nicht sichtbare Ziele. */
+/** Glocke in der Kopfzeile: Zahl der ungelesenen, Liste, Ziel öffnen und als gelesen markieren, nicht sichtbare Ziele, weitere Arten der App. */
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -40,7 +40,7 @@ describe('Glocke', () => {
     expect(items[0]).toHaveTextContent('ungelesen');
     expect(items[1]).toHaveTextContent('hat auf deinen Kommentar geantwortet · Laptop 1');
     await userEvent.click(within(items[0]!).getByRole('button'));
-    expect(onOpen).toHaveBeenCalledWith({ type: 'connection', id: CONN }, 'c1');
+    expect(onOpen).toHaveBeenCalledWith({ type: 'connection', id: CONN }, 'c1', expect.objectContaining({ id: 'n1', kind: 'mention' }));
     await waitFor(() => expect(calls.some(c => c.method === 'POST' && c.url.endsWith('/v1/me/notifications/read'))).toBe(true));
     const post = calls.find(c => c.method === 'POST')!;
     expect(await post.json()).toEqual({ ids: ['n1'] });
@@ -78,5 +78,41 @@ describe('Glocke', () => {
     renderWith(<NotificationBell onOpen={() => undefined} />);
     await userEvent.click(await screen.findByRole('button', { name: 'Benachrichtigungen' }));
     expect(await screen.findByText(/Keine Benachrichtigungen/)).toBeInTheDocument();
+  });
+
+  it('weitere Arten: Darstellung der App, allgemeiner Text für unbekannte, Öffnen mit dem ganzen Eintrag', async () => {
+    const CASE = '33333333-3333-4333-8333-333333333333';
+    const task = (o: Record<string, unknown> & { id: string }) => note({
+      kind: 'task_assigned', target: { type: 'case', id: CASE, title: 'Offerte Müller', available: true }, subject: { type: 'task', id: 't1', excerpt: 'Fällig am Freitag' }, ...o,
+    });
+    routes([
+      task({ id: 'n1' }),
+      task({ id: 'n2', kind: 'sla_breached', actor: null, subject: { type: 'task', id: 't2', excerpt: null } }),
+      task({ id: 'n3', kind: 'run_failed', subject: { type: 'workflow_run', id: 'r1', excerpt: null } }),
+      task({ id: 'n4', kind: 'approval_requested', actor: null, subject: { type: 'task', id: 't3', excerpt: null } }),
+      note({ id: 'n5' }),
+    ], 5);
+    const onOpen = vi.fn();
+    renderWith(<NotificationBell onOpen={onOpen} />, {
+      config: {
+        notificationKinds: {
+          task_assigned: { text: n => <><b>{n.actor?.name}</b> hat dir eine Aufgabe zugewiesen</> },
+          sla_breached: { text: () => 'Frist überschritten', icon: <span data-testid="sla-icon">!</span> },
+        },
+      },
+    });
+    await userEvent.click(await screen.findByRole('button', { name: 'Benachrichtigungen, 5 ungelesen' }));
+    const items = within(screen.getByRole('dialog')).getAllByRole('listitem');
+    expect(items[0]).toHaveTextContent('Ilse Integration hat dir eine Aufgabe zugewiesen · Offerte Müller');
+    expect(items[0]).toHaveTextContent('Fällig am Freitag');
+    expect(items[1]).toHaveTextContent('Frist überschritten · Offerte Müller');
+    expect(within(items[1]!).getByTestId('sla-icon')).toBeInTheDocument();
+    // Unbekannte Arten: allgemeiner Text, mit oder ohne Person
+    expect(items[2]).toHaveTextContent('Neue Benachrichtigung von Ilse Integration · Offerte Müller');
+    expect(items[3]).toHaveTextContent(/^Neue Benachrichtigung · Offerte Müller/);
+    // Erwähnungen unverändert
+    expect(items[4]).toHaveTextContent('Ilse Integration hat dich erwähnt · GitHub Org');
+    await userEvent.click(within(items[2]!).getByRole('button'));
+    expect(onOpen).toHaveBeenCalledWith({ type: 'case', id: CASE }, 'r1', expect.objectContaining({ kind: 'run_failed', subject: { type: 'workflow_run', id: 'r1', excerpt: null } }));
   });
 });

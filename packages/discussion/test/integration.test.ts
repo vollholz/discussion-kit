@@ -2,7 +2,8 @@
  * Einbindung ohne `@vollholz/iam`: eine kleine App «shop» mit eigenem Schema, eigenen Rollen, eigenem Mandanten- und
  * Personenausdruck und einem Host aus wenigen Zeilen. Prüft Migrationen (auch zweimal), Lesesicht je Mandant,
  * Kommentare mit Erwähnung und Antwort, Benachrichtigungen nur für die empfangende Person, Rechte über den Host,
- * Anhänge mit Verschlüsselung und das weiche Löschen beim Löschen des Ziels.
+ * Anhänge mit Verschlüsselung, das weiche Löschen beim Löschen des Ziels und weitere Arten der Inbox (Migration 003 auf
+ * bestehenden Einträgen, Einträge eines anderen Bausteins mit eigener Auflösung).
  *
  * Datenbank: TEST_POSTGRES_URL (Superuser) oder POSTGRES_SUPERUSER_PASSWORD (+ POSTGRES_PORT, Standard 5433); sonst
  * werden die Tests übersprungen.
@@ -15,7 +16,7 @@ import { join } from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import pg from 'pg';
-import { discussion, discussionMigrations, FsBlobStore, type DiscussionHost, type DiscussionTarget } from '../src/index.ts';
+import { discussion, discussionInbox, discussionMigrations, FsBlobStore, type DiscussionHost, type DiscussionTarget, type Tx } from '../src/index.ts';
 
 const superUrl = process.env.TEST_POSTGRES_URL
   ?? (process.env.POSTGRES_SUPERUSER_PASSWORD ? `postgres://postgres:${encodeURIComponent(process.env.POSTGRES_SUPERUSER_PASSWORD)}@localhost:${process.env.POSTGRES_PORT ?? '5433'}/postgres` : null);
@@ -71,6 +72,32 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
       return r ? { id: r.id, classified: false, title: r.name, ref: { id: r.id, name: r.name } } : null;
     },
   };
+  /** Aufgaben eines anderen Bausteins der App (nur im Speicher): sichtbar für die genannten Personen. */
+  const tasks: Record<string, { title: string; note: string; visibleTo: string[] }> = {};
+  const inbox = discussionInbox({
+    schema: 'shop', kinds: ['task_assigned', 'sla_breached'],
+    subjects: {
+      task: {
+        async load(req, _tx, ref) {
+          const t = tasks[ref.subjectId];
+          return t && t.visibleTo.includes(host.principal(req).id) ? { title: t.title, excerpt: t.note } : null;
+        },
+      },
+    },
+  });
+  /** Transaktion als Person (wie host.tx, ohne Anfrage). */
+  const asUser = async <T>(who: string, fn: (tx: Tx) => Promise<T>): Promise<T> => {
+    const c = await pool.connect();
+    try {
+      await c.query('BEGIN'); await c.query(`SET LOCAL ROLE ${appRole}`);
+      await c.query(`SELECT set_config('shop.tenant', $1, true), set_config('shop.principal', $2, true)`, [tenantOf[who], who]);
+      const r = await fn(c);
+      await c.query('COMMIT');
+      return r;
+    } catch (e) { await c.query('ROLLBACK'); throw e; } finally { c.release(); }
+  };
+  /** Eintrag aus der Zeit vor Migration 003 (nur mention/reply und comment erlaubt). */
+  const legacy = { id: randomUUID(), recipient: randomUUID() };
   const call = async (who: string, method: string, url: string, body?: unknown) => {
     const r = await app.inject({ method: method as 'GET', url, headers: { 'x-user': who }, ...(body !== undefined ? { payload: body as object } : {}) });
     return { status: r.statusCode, body: r.body ? JSON.parse(r.body) : null };
@@ -94,7 +121,12 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
       CREATE POLICY t ON shop.item TO ${appRole} USING (tenant_id = ${TENANT}) WITH CHECK (tenant_id = ${TENANT});
       GRANT SELECT ON shop.principal TO ${appRole}; GRANT SELECT, INSERT, DELETE ON shop.item TO ${appRole};`);
     const m = discussionMigrations({ schema: 'shop', app: appRole, sched: schedRole, tenant: TENANT, principal: PRINCIPAL });
-    for (const x of m.migrations) await admin.query(x.sql);
+    // Erst bis 002, dann ein bestehender Eintrag, dann 003 (Migration auf bestehenden Daten)
+    for (const x of m.migrations.filter(x => x.name < 'discussion_003')) await admin.query(x.sql);
+    await admin.query(`INSERT INTO shop.notification (tenant_id, id, recipient_id, kind, target_type, target_id, subject_type, subject_id) VALUES ($1, $2, $3, 'mention', 'item', $4, 'comment', $5)`,
+      [A, legacy.id, legacy.recipient, randomUUID(), randomUUID()]);
+    await assert.rejects(admin.query(`INSERT INTO shop.notification (tenant_id, recipient_id, kind, target_type, target_id, subject_type, subject_id) VALUES ($1, $2, 'task_assigned', 'item', $2, 'task', $2)`, [A, randomUUID()]), /check constraint/);
+    for (const x of m.migrations.filter(x => x.name >= 'discussion_003')) await admin.query(x.sql);
     await admin.query(`SELECT shop.discussion_targets('{"item": "shop.item"}')`);
     for (const [id, name, t] of [[ada, 'Ada', A], [bea, 'Bea', A], [carl, 'Carl', A], [gus, 'Gus', B]] as const) {
       await admin.query(`INSERT INTO shop.principal (tenant_id, id, kind, display_name) VALUES ($1, $2, 'user', $3)`, [t, id, name]);
@@ -104,7 +136,7 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
     pool = new pg.Pool({ connectionString: withDb(superUrl!, db), max: 4 });
     dir = mkdtempSync(join(tmpdir(), 'dk-test-'));
     app = Fastify();
-    await app.register(discussion({ schema: 'shop', host, targets: [itemTarget], attachments: { store: new FsBlobStore(dir), keys: [{ id: 'k1', key: randomBytes(32) }] } }));
+    await app.register(discussion({ schema: 'shop', host, targets: [itemTarget], attachments: { store: new FsBlobStore(dir), keys: [{ id: 'k1', key: randomBytes(32) }] }, notifications: inbox }));
     await app.ready();
   });
   after(async () => {
@@ -123,6 +155,18 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
     const after = (await admin.query(`SELECT qual FROM pg_policies WHERE schemaname = 'shop' AND tablename = 'comment' AND policyname = 'target_read'`)).rows[0].qual;
     assert.equal(after, before);
     assert.match(after, /shop\.item/);
+  });
+
+  test('Migration 003: bestehende Einträge bleiben, feste Listen ersetzt durch Formatprüfung, Lesesicht unverändert', async () => {
+    assert.equal((await admin.query('SELECT kind FROM shop.notification WHERE id = $1', [legacy.id])).rows[0]?.kind, 'mention');
+    const checks = (await admin.query(`SELECT conname, pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conrelid = 'shop.notification'::regclass AND contype = 'c' ORDER BY 1`)).rows;
+    assert.deepEqual(checks.map(c => c.conname), ['notification_kind_format', 'notification_subject_type_format', 'notification_target_type_check']);
+    assert.ok(!checks.some(c => /'mention'|'comment'/.test(c.def)), JSON.stringify(checks));
+    await assert.rejects(admin.query(`INSERT INTO shop.notification (tenant_id, recipient_id, kind, target_type, target_id, subject_type, subject_id) VALUES ($1, $2, 'Task-Assigned', 'item', $2, 'task', $2)`, [A, randomUUID()]), /notification_kind_format/);
+    await assert.rejects(admin.query(`INSERT INTO shop.notification (tenant_id, recipient_id, kind, target_type, target_id, subject_type, subject_id) VALUES ($1, $2, 'task_assigned', 'item', $2, 'Task', $2)`, [A, randomUUID()]), /notification_subject_type_format/);
+    const policies = (await admin.query(`SELECT policyname, qual FROM pg_policies WHERE schemaname = 'shop' AND tablename = 'notification' ORDER BY 1`)).rows;
+    assert.deepEqual(policies.map(p => p.policyname), ['own_delete', 'own_read', 'own_update', 'sched_purge', 'sched_purge_read', 'tenant_isolation']);
+    assert.match(policies.find(p => p.policyname === 'own_read').qual, /recipient_id/);
   });
 
   test('Kommentar mit Erwähnung und Antwort; Benachrichtigungen nur für die empfangende Person', async () => {
@@ -231,5 +275,44 @@ describe('Einbindung ohne IAM (App «shop»)', { skip }, () => {
     assert.deepEqual(await all(gus, null, 5), []);
     assert.equal((await call(ada, 'GET', '/v1/me/comments?cursor=kaputt')).status, 422);
     assert.equal((await call(ada, 'GET', '/v1/me/comments?filter=andere')).status, 400);
+  });
+
+  test('Weitere Arten: anderer Baustein meldet in seiner Transaktion, Liste nur für die empfangende Person, Auflösung der App', async () => {
+    const t1 = randomUUID(), t2 = randomUUID(), kase = randomUUID();
+    tasks[t1] = { title: 'Offerte prüfen', note: 'Fällig am Freitag', visibleTo: [bea, ada] };
+    const created = await asUser(ada, tx => inbox.notify(tx, {
+      tenantId: A, targetType: 'case', targetId: kase, subjectType: 'task', subjectId: t1, actorId: ada,
+      // nicht an sich selbst, nur Personen, die es gibt, doppelte nur einmal
+      recipients: [{ id: bea, kind: 'task_assigned' }, { id: ada, kind: 'task_assigned' }, { id: randomUUID(), kind: 'task_assigned' }, { id: bea, kind: 'task_assigned' }],
+    }));
+    assert.equal(created, 1);
+    // Wiederholung (z. B. erneut zugewiesen): je Person, Art und Gegenstand einmal, ohne Fehler trotz Lesesicht own_read
+    assert.equal(await asUser(ada, tx => inbox.notify(tx, { tenantId: A, targetType: 'case', targetId: kase, subjectType: 'task', subjectId: t1, actorId: ada, recipients: [{ id: bea, kind: 'task_assigned' }] })), 0);
+    // Ohne auslösende Person (Frist überschritten), Gegenstand später nicht mehr auflösbar
+    assert.equal(await asUser(ada, tx => inbox.notify(tx, { tenantId: A, targetType: 'case', targetId: kase, subjectType: 'task', subjectId: t2, actorId: null, recipients: [{ id: bea, kind: 'sla_breached' }] })), 1);
+
+    type N = { kind: string; actor: { name: string } | null; target: { type: string; id: string; title: string | null; available: boolean }; subject: { type: string; id: string; excerpt: string | null } };
+    const bInbox = (await call(bea, 'GET', '/v1/me/notifications')).body as { items: N[]; unread: number };
+    const foreign = bInbox.items.filter(n => n.subject.type === 'task');
+    assert.deepEqual(foreign.map(n => [n.kind, n.target.type, n.target.title, n.target.available, n.subject.excerpt, n.actor?.name ?? null]), [
+      ['sla_breached', 'case', null, false, null, null],
+      ['task_assigned', 'case', 'Offerte prüfen', true, 'Fällig am Freitag', 'Ada'],
+    ]);
+    assert.ok(bInbox.items.some(n => n.kind === 'mention' && n.subject.type === 'comment'), 'Kommentare weiterhin dabei');
+    // Nur die empfangende Person: Ada sieht weder in der Liste noch direkt in der Datenbank Beas Einträge
+    assert.ok(!(await call(ada, 'GET', '/v1/me/notifications')).body.items.some((n: N) => n.subject.type === 'task'));
+    assert.equal(await asUser(ada, async tx => (await tx.query<{ n: number }>(`SELECT count(*)::int AS n FROM shop.notification WHERE subject_type = 'task'`)).rows[0]!.n), 0);
+    assert.equal(await asUser(bea, async tx => (await tx.query<{ n: number }>(`SELECT count(*)::int AS n FROM shop.notification WHERE subject_type = 'task'`)).rows[0]!.n), 2);
+    // Sichtbarkeit nach der Auflösung der App: Bea darf die Aufgabe nicht mehr sehen
+    tasks[t1]!.visibleTo = [ada];
+    const later = (await call(bea, 'GET', '/v1/me/notifications')).body.items.find((n: N) => n.kind === 'task_assigned') as N;
+    assert.deepEqual([later.target.title, later.target.available, later.subject.excerpt, later.actor], [null, false, null, null]);
+    // Als gelesen markieren wie bei Kommentaren
+    assert.equal((await call(bea, 'POST', '/v1/me/notifications/read', { all: true })).body.updated >= 2, true);
+    // Nicht registrierte Art bzw. Art des Gegenstands: Fehler im Programm, nichts angelegt
+    await assert.rejects(asUser(ada, tx => inbox.notify(tx, { tenantId: A, targetType: 'case', targetId: kase, subjectType: 'task', subjectId: t1, actorId: ada, recipients: [{ id: bea, kind: 'run_failed' }] })), /nicht registriert/);
+    await assert.rejects(asUser(ada, tx => inbox.notify(tx, { tenantId: A, targetType: 'case', targetId: kase, subjectType: 'workflow_run', subjectId: t1, actorId: ada, recipients: [{ id: bea, kind: 'task_assigned' }] })), /nicht registriert/);
+    assert.throws(() => discussionInbox({ schema: 'shop', kinds: ['Bad-Kind'] }), /a–z/);
+    assert.throws(() => discussionInbox({ schema: 'shop', subjects: { comment: { load: async () => null } } }), /comment/);
   });
 });
