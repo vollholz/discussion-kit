@@ -9,6 +9,39 @@ folgen die Angaben für die Entwickler der App. Sammeln für eine App: `npx disc
 
 ## [Unveröffentlicht]
 
+## [1.3.0] – 2026-11-02
+
+### Für Nutzer
+
+- Die Glocke kann neben Erwähnungen und Antworten auch Benachrichtigungen aus anderen Bereichen der App zeigen, z. B.
+  wenn dir eine Aufgabe zugewiesen wird.
+
+### Für den Betrieb
+
+- Neue Datenbank-Migration `discussion_003_inbox_kinds`: ersetzt die festen Listen der Arten in der Tabelle der
+  Benachrichtigungen durch eine Formatprüfung (läuft mit den Migrationen der App; bestehende Einträge bleiben gültig).
+
+### Hinzugefügt
+
+- `discussionInbox({ schema, kinds, subjects })`: Inbox mit weiteren Arten anderer Bausteine der App (z. B.
+  `task_assigned` an `task`). Als `notifications` an `discussion(...)` geben und dem meldenden Baustein reichen;
+  `inbox.notify(tx, notice)` legt Einträge in dessen Transaktion an, mit denselben Regeln wie bei Kommentaren (nicht an
+  sich selbst, nur Personen, je Person, Art und Gegenstand einmal) und liefert die Zahl neuer Einträge. Nicht
+  registrierte Arten sind ein Fehler.
+- `InboxSubject.load(req, tx, ref)` je Art von Gegenstand: Bezeichnung und Kurztext mit den Rechten der empfangenden
+  Person; `null` ergibt `available: false` (wie ein nicht mehr sichtbares Ziel).
+- Typen `DiscussionInbox`, `InboxNotice`, `InboxOptions`, `InboxSubject`, `InboxSubjectRef`, `InboxSubjectView`,
+  Konstante `COMMENT_KINDS`.
+- Migration `discussion_003_inbox_kinds`: CHECKs `notification_kind_format` und `notification_subject_type_format`
+  (a–z und «_», höchstens 40 Zeichen) statt `kind IN ('mention', 'reply')` und `subject_type IN ('comment')`;
+  Lesesicht `own_*` unverändert.
+
+### Geändert
+
+- `GET /v1/me/notifications`: `kind` und `subject.type` sind im Schema Zeichenketten (Format wie oben) statt fester
+  Werte und liefern auch die registrierten Arten. Für Kommentare ändert sich nichts.
+- `DiscussionOptions.notifications` nimmt zusätzlich eine `DiscussionInbox` an.
+
 ## [1.2.0] – 2026-11-01
 
 ### Für Nutzer

@@ -9,6 +9,30 @@ folgen die Angaben für die Entwickler der App. Sammeln für eine App: `npx disc
 
 ## [Unveröffentlicht]
 
+## [1.3.0] – 2026-11-02
+
+### Für Nutzer
+
+- Die Glocke zeigt auch Benachrichtigungen aus anderen Bereichen der App (z. B. eine zugewiesene Aufgabe) mit eigenem
+  Text; unbekannte Arten erscheinen als «Neue Benachrichtigung».
+
+### Für den Betrieb
+
+- (keine)
+
+### Hinzugefügt
+
+- `DiscussionProvider`: `notificationKinds: { [kind]: { text(n), icon? } }` für weitere Arten der Glocke. `text` liefert
+  die Zeile vor der Bezeichnung des Ziels, `icon` ersetzt das Kürzel der Person. Typ `NotificationKind`.
+- `NotificationBell`: `onOpen` bekommt als dritten Wert den ganzen Eintrag (`Notification`), damit die Shell nach
+  `subject.type` entscheiden kann. Bestehende Aufrufe mit zwei Parametern bleiben gültig.
+
+### Geändert
+
+- `Notification`: `kind` und `subject.type` erlauben neben `mention`/`reply` bzw. `comment` weitere Zeichenketten.
+  Unbekannte Arten ohne Eintrag in `notificationKinds` zeigen einen allgemeinen Text; Erwähnungen und Antworten wie
+  bisher.
+
 ## [1.2.0] – 2026-11-01
 
 ### Für Nutzer

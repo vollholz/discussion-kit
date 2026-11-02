@@ -44,6 +44,17 @@ Adresse). Die Liste lädt nach, bis der Kommentar da ist, scrollt hin, hebt ihn 
 <CommentsPanel target={{ type: 'order', id }} can={order.can} commentId={search.get('kommentar')} />
 ```
 
+**Weitere Arten in der Glocke** – Arten, die die App im Backend registriert (`discussionInbox`), stellt sie im
+Provider dar. Unbekannte Arten erscheinen als «Neue Benachrichtigung (von …)», Erwähnungen und Antworten wie bisher:
+
+```tsx
+<DiscussionProvider … notificationKinds={{
+  task_assigned: { text: n => <><b>{n.actor?.name}</b> hat dir eine Aufgabe zugewiesen</> },
+  sla_breached: { text: () => 'Frist überschritten', icon: <Icon name="bell" /> },
+}}>
+<NotificationBell onOpen={(t, subjectId, n) => n.subject.type === 'task' ? navigate(`/aufgaben/${subjectId}`) : navigate(…)} />
+```
+
 ## Anpassen
 
 | Option | Vorgabe |

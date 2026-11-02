@@ -10,7 +10,7 @@
  * ```
  * Apps mit `@vollholz/iam-web`: `useIamDiscussion` aus `@vollholz/discussion-web/iam` liefert die Konfiguration.
  */
-export { DiscussionProvider, useDiscussion, useToaster, type Discussion, type DiscussionConfig, type Person, type ProblemBody, type TargetConfig, type Toaster } from './config.tsx';
+export { DiscussionProvider, useDiscussion, useToaster, type Discussion, type DiscussionConfig, type NotificationKind, type Person, type ProblemBody, type TargetConfig, type Toaster } from './config.tsx';
 export { CommentsPanel } from './CommentsPanel.tsx';
 export { AttachmentsPanel } from './AttachmentsPanel.tsx';
 export { NotificationBell, type InboxTarget } from './NotificationBell.tsx';

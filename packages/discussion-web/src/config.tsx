@@ -5,6 +5,7 @@
  * die Komponenten wie der Rest der App aussehen.
  */
 import { createContext, useContext, useMemo, type ComponentType, type ReactNode } from 'react';
+import type { Notification } from './api.ts';
 import { defaultComponents, DiscussionApiError, fallbackToaster, type DiscussionComponents } from './ui.tsx';
 
 /** Wörter und Pfad je Zieltyp. */
@@ -20,6 +21,16 @@ export interface TargetConfig {
 }
 
 export interface Person { id: string; name: string; email?: string | null }
+
+/**
+ * Darstellung einer Art von Benachrichtigung, die die App registriert hat (z. B. `task_assigned`). `text` liefert die
+ * Zeile vor der Bezeichnung des Ziels, z. B. «Ada hat dir eine Aufgabe zugewiesen»; `icon` erscheint statt des Kürzels
+ * der Person (Einträge ohne Person, z. B. Frist überschritten). Erwähnungen und Antworten hat das Paket selbst.
+ */
+export interface NotificationKind {
+  text(n: Notification): ReactNode;
+  icon?: ReactNode;
+}
 
 export interface Toaster { show(text: string): void; error(e: unknown, title: string): void }
 
@@ -46,6 +57,8 @@ export interface DiscussionConfig {
   components?: Partial<DiscussionComponents>;
   /** Fehler aus einer Antwort bauen, wie die Fehlerbausteine der App ihn erwarten (Standard: `DiscussionApiError`). */
   toError?: (status: number, problem: ProblemBody, requestId: string | null) => Error;
+  /** Weitere Arten der Glocke (Schlüssel = `kind`); unbekannte Arten erscheinen mit einem allgemeinen Text. */
+  notificationKinds?: Record<string, NotificationKind>;
 }
 
 /** Fehler als Problem Details (RFC 9457). */
@@ -70,8 +83,9 @@ export function DiscussionProvider({ children, ...config }: DiscussionConfig & {
       toast: config.toast ?? null,
       ui: { ...defaultComponents, ...config.components },
       toError: config.toError ?? ((status, problem, requestId) => new DiscussionApiError(status, problem, requestId)),
+      notificationKinds: config.notificationKinds ?? {},
     };
-  }, [config.targets, config.baseUrl, config.headers, config.link, config.me, config.can, config.onUnauthorized, config.searchPeople, config.toast, config.components, config.toError]);
+  }, [config.targets, config.baseUrl, config.headers, config.link, config.me, config.can, config.onUnauthorized, config.searchPeople, config.toast, config.components, config.toError, config.notificationKinds]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
